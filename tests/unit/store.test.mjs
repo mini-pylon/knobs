@@ -393,3 +393,31 @@ test('a write that failed is not undone by an older stored copy on reattach', t 
   assert.equal(knobs.control('hero.title'), 'Newer');
   assert.deepEqual(JSON.parse(storage.map.get('k')), { 'hero.title': 'Newer' });
 });
+
+test('a write that failed under one key is never written under another', t => {
+  inBrowser(t);
+  const storage = switchable({ b: JSON.stringify({ 'hero.title': 'B value' }) });
+  const knobs = defineControls(schema());
+  knobs.attach(storage, 'a');
+  storage.fail.write = true;
+  knobs.set('hero.title', 'A value');
+  knobs.detach();
+  storage.fail.write = false;
+  knobs.attach(storage, 'b');
+  assert.equal(knobs.control('hero.title'), 'B value');
+  assert.deepEqual(JSON.parse(storage.map.get('b')), { 'hero.title': 'B value' });
+});
+
+test('a write that failed in one storage area is never written to another', t => {
+  inBrowser(t);
+  const first = switchable();
+  const second = switchable({ k: JSON.stringify({ 'hero.title': 'Second' }) });
+  const knobs = defineControls(schema());
+  knobs.attach(first, 'k');
+  first.fail.write = true;
+  knobs.set('hero.title', 'First');
+  knobs.detach();
+  knobs.attach(second, 'k');
+  assert.equal(knobs.control('hero.title'), 'Second');
+  assert.deepEqual(JSON.parse(second.map.get('k')), { 'hero.title': 'Second' });
+});

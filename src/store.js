@@ -155,8 +155,8 @@ export function defineControls(groups, fileValues = {}) {
   const subscribers = new Set();
   let storage = null;
   let storageKey = null;
-  // True while the last write to storage failed.
-  let unsaved = false;
+  // Where the last write was going while it failed: { storage, key }, or null.
+  let unsaved = null;
 
   function requirePath(path) {
     if (!byPath.has(path)) throw new Error(`knobs: unknown control: ${path}`);
@@ -178,7 +178,8 @@ export function defineControls(groups, fileValues = {}) {
     for (const [path] of byPath) {
       if (saved.has(path)) out[path] = saved.get(path);
     }
-    unsaved = !storageTry(storage, 'setItem', storageKey, JSON.stringify(out)).ok;
+    const ok = storageTry(storage, 'setItem', storageKey, JSON.stringify(out)).ok;
+    unsaved = ok ? null : { storage, key: storageKey };
   }
 
   function remember(path, value) {
@@ -252,12 +253,15 @@ export function defineControls(groups, fileValues = {}) {
     requireBrowser();
     storage = nextStorage;
     storageKey = key;
-    // What is in memory is newer than storage when the last write failed,
-    // and storage cannot be read at all when the read fails: either way,
-    // keep the values in memory and try to save them again.
-    const read = unsaved ? { ok: false } : storageTry(storage, 'getItem', key);
+    // What is in memory is newer than storage when the last write to this
+    // same storage and key failed, and storage cannot be read at all when the
+    // read fails: either way, keep the values in memory. Only the pending
+    // write is tried again, and never under another key or storage.
+    const pending = unsaved?.storage === nextStorage && unsaved?.key === key;
+    if (!pending) unsaved = null;
+    const read = pending ? { ok: false } : storageTry(storage, 'getItem', key);
     if (!read.ok) {
-      if (unsaved) persist();
+      if (pending) persist();
       return;
     }
     let data = {};

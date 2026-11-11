@@ -3,10 +3,12 @@ title: control-drawer
 kind: spec
 target: knobs
 topic: control-drawer
-status: draft
+status: approved
 written: 2026-11-11T04:21:48Z
 by: claude
 worktree: /home/jmo/linda/repos/knobs/.worktrees/spec-control-drawer
+approved_at: 2026-11-11T04:46:08Z
+approved_by: josh
 ---
 
 # control-drawer

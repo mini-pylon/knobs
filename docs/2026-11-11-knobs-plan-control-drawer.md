@@ -1334,7 +1334,7 @@ node --test tests/browser/commands.test.mjs
 src/drawer.js' imported from
 ```
 
-That is the failure with no implementation at all. On a tree where Task 4 is built, the file runs and all 27 tests fail.
+That is the failure with no implementation at all. On a tree where Task 4 is built, the file runs and all 28 tests fail.
 
 **Implementation.** Port the console from the frozen source, replacing `resolve`, `run` and `setCommand` with `parseLine` and `coerce`. An invalid value prints `<path>: invalid value: <value>` in the error style, and a clamped number keeps today's `(clamped to min..max)` note. `on <group>` works for a hidden group.
 
@@ -1354,7 +1354,7 @@ Keep every other console behaviour of the frozen source: history, tab completion
 
 ### Task 6: the instrument side
 
-**Files:** create `src/performance.js`, `tests/browser/instruments.test.mjs`; edit `src/drawer.js`.
+**Files:** create `src/performance.js`, `tests/browser/instruments.test.mjs`; edit `src/drawer.js`, `src/style.js`.
 
 ```bash apply
 mkdir -p tests/browser
@@ -1519,11 +1519,11 @@ node --test tests/browser/instruments.test.mjs
 src/instruments.js' imported from
 ```
 
-That is the failure with no implementation at all. On a tree where Tasks 4 and 5 are built, the file runs and all 10 tests fail.
+That is the failure with no implementation at all. On a tree where Tasks 4 and 5 are built, the file runs and all 11 tests fail.
 
 **Implementation.** `src/performance.js` exports `performancePage({ stats })`, a page named `performance` with `fps` measured from its own frame loop and `memory` rows, then a row for each entry of `stats()`, and a canvas chart of frame rate. Its `show` and `hide` start and stop the loop, and `destroy` cancels it. Pages may define `update`, `show`, `hide` and `destroy`.
 
-Tabs become the console, `performance`, any `pages`, then the groups. The page's class is `term-page-performance`, so rename the frozen stylesheet's two `.term-page-perf` selectors in `src/style.js`, the desktop grid and the narrow-screen rule. `unmount` now also calls each page's and visual's `destroy`. The drawer calls `show` on the showing page while it is open and `hide` otherwise. `~` follows the same rules as backtick, opens `performance`, and closes the drawer if it is already showing.
+Tabs become the console, `performance`, any `pages`, then the groups. The page's class is `term-page-performance`, so rename the frozen stylesheet's two `.term-page-perf` selectors in `src/style.js`, the desktop grid and the narrow-screen rule. `unmount` now also calls each page's and visual's `destroy`. The drawer calls `show` on the showing page while it is open and `hide` otherwise, and calls the showing page's `update` four times a second while the drawer is open, from the same 250 ms interval that refreshes the status line, as the frozen source does. `~` follows the same rules as backtick, opens `performance`, and closes the drawer if it is already showing.
 
 Each params tab's right side shows `visuals[group]` if the project gave one, otherwise a default panel. The panel lists every control in that group whose value differs from its default, one `.term-changes-line` each, as `<key>  <original> → <current>` with two spaces after the key, or `nothing changed` when there are none. It redraws from a store subscription limited to its group and stops on `destroy`. Only the showing tab's panel exists. It is hidden below 761 px, as the picture is today. A picture's `frame` runs only while its tab shows in an open drawer.
 

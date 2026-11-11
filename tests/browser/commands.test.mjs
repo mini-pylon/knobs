@@ -354,3 +354,97 @@ test('unmount revokes a download object URL that is still pending', async () => 
   const urls = await page.evaluate(() => window.__urls);
   assert.deepEqual(urls.revoked, urls.created);
 });
+
+test('up and down walk command history', async () => {
+  await fresh();
+  await openDrawer(page);
+  const prompt = page.locator('.term-prompt input');
+  await type(page, 'hero.overlay 0.5');
+  await type(page, 'hero.title Hello');
+  await prompt.press('ArrowUp');
+  assert.equal(await prompt.inputValue(), 'hero.title Hello');
+  await prompt.press('ArrowUp');
+  assert.equal(await prompt.inputValue(), 'hero.overlay 0.5');
+  await prompt.press('ArrowUp');
+  assert.equal(await prompt.inputValue(), 'hero.overlay 0.5');
+  await prompt.press('ArrowDown');
+  assert.equal(await prompt.inputValue(), 'hero.title Hello');
+  await prompt.press('ArrowDown');
+  assert.equal(await prompt.inputValue(), '');
+});
+
+test('tab completes one match and lists several', async () => {
+  await fresh();
+  await openDrawer(page);
+  const prompt = page.locator('.term-prompt input');
+  await prompt.fill('over');
+  await prompt.press('Tab');
+  assert.equal(await prompt.inputValue(), 'overlay ');
+  await prompt.fill('s');
+  await prompt.press('Tab');
+  assert.equal(await prompt.inputValue(), 's');
+  assert.match(await logText(page), /set {2}save {2}scene\.speed/);
+  await prompt.fill('reset hero.t');
+  await prompt.press('Tab');
+  assert.equal(await prompt.inputValue(), 'reset hero.title ');
+});
+
+test('the slash menu moves with the arrows, completes on Tab, and runs on Enter', async () => {
+  await fresh();
+  await openDrawer(page);
+  const prompt = page.locator('.term-prompt input');
+  await prompt.fill('/');
+  await page.locator('.term-slash').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('.term-slash-item.active .term-slash-name').textContent(), '/save');
+  await prompt.press('ArrowDown');
+  assert.equal(await page.locator('.term-slash-item.active .term-slash-name').textContent(), '/download');
+  await prompt.press('ArrowUp');
+  assert.equal(await page.locator('.term-slash-item.active .term-slash-name').textContent(), '/save');
+  await prompt.press('ArrowUp');
+  assert.equal(await page.locator('.term-slash-item.active .term-slash-name').textContent(), '/ping');
+  await prompt.press('Tab');
+  assert.equal(await prompt.inputValue(), '/ping ');
+  assert.equal(await page.locator('.term-slash').isHidden(), true);
+  await prompt.fill('/');
+  await prompt.press('Enter');
+  await page.waitForFunction(() => document.querySelector('[data-knobs]').shadowRoot.querySelector('.term-log').textContent.includes('save needs the knobs Vite plugin'));
+  assert.equal(await prompt.inputValue(), '');
+});
+
+test('double-clicking a control name resets it', async () => {
+  await fresh();
+  await openDrawer(page);
+  await type(page, 'hero.title Changed');
+  await tab('hero').click();
+  await page.locator('[data-path="hero.title"] .term-key').dblclick();
+  assert.equal(await read('hero-title'), 'The original headline');
+  assert.match(await page.locator('.term-log').evaluate(node => node.textContent), /reset hero\.title/);
+});
+
+test('a click in the console focuses the prompt, except on a control or a text selection', async () => {
+  await fresh();
+  await openDrawer(page);
+  const prompt = page.locator('.term-prompt input');
+  const focused = () => prompt.evaluate(node => node === node.getRootNode().activeElement);
+  await page.locator('#page-input').click();
+  await page.locator('.term-log').click();
+  assert.equal(await focused(), true);
+  await tab('hero').click();
+  await page.locator('#page-input').click();
+  await page.locator('.term-viz').click();
+  assert.equal(await focused(), false);
+  await tab('fixture').click();
+  await prompt.evaluate(node => node.blur());
+  const stayedBlurred = await page.evaluate(() => {
+    const root = document.querySelector('[data-knobs]').shadowRoot;
+    const line = root.querySelector('.term-line');
+    const range = new Range();
+    range.selectNodeContents(line);
+    const selection = root.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    root.querySelector('.term-log').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    return root.activeElement !== root.querySelector('.term-prompt input');
+  });
+  assert.equal(stayedBlurred, true);
+});

@@ -53,21 +53,22 @@ The prototyping skill calls the knobs skill. wings-vdb keeps its own drawer for 
 When Josh says "let's start a new prototype from `<repo>/<branch>`":
 
 1. **Branch** (prototyping skill). A worktree on a new prototype branch from that starting point.
-2. **Install** (knobs skill). Knobs is added as a dev dependency from its local path on this machine, as a `file:` dependency, which npm installs as a symlink. A fix to knobs shows up in every running prototype.
+2. **Install** (knobs skill). Knobs is added as a dev dependency from its local path on this machine, as a `file:` dependency, which npm installs as a symlink. A fix to knobs reaches every running prototype with a page reload.
 3. **Read and propose** (knobs skill). The agent reads the project and lists the controls it would create, grouped as variants, variables and copy. Josh trims the list or says go.
-4. **Wire** (knobs skill). The agent writes `controls.js` and an empty `knobs.values.json` (`{}`), mounts the drawer on the client only, and adds a read at each place in the code. Editing the project's component code on the prototype branch is intended.
+4. **Wire** (knobs skill). The agent writes the controls file (`controls.js`, or `controls.ts` in a TypeScript project) and an empty `knobs.values.json` (`{}`), registers `knobs/vite` in the project's Vite config, mounts the drawer from a client-only component, and adds a read at each place in the code, importing it from the controls file. Editing the project's component code on the prototype branch is intended.
 5. **Serve** (prototyping skill). The dev server starts and Josh gets a link. Backtick opens the drawer.
 6. **Keep** (knobs skill). Josh's values save to a file on the prototype branch.
 
 ### Controls file
 
-One file lists every control, so the drawer shows controls for components not on the current page.
+One file lists every control, so the drawer shows controls for components not on the current page. It is the only place the schema is registered, and every read is imported from it, so a read can never run before registration. There is no global registry.
 
 ```js
 import { defineControls } from 'knobs';
+import { bindReact } from 'knobs/react';
 import values from './knobs.values.json';
 
-export default defineControls([
+export const knobs = defineControls([
   { name: 'hero', about: 'Homepage hero', controls: [
     { key: 'variant', type: 'select', value: 'split', options: ['split', 'full', 'stacked'] },
     { key: 'title', type: 'text', value: 'The original headline' },
@@ -76,24 +77,28 @@ export default defineControls([
     { key: 'accent', type: 'color', value: '#e8c547' },
   ]},
 ], values);
+export const { control, onControl } = knobs;
+export const useControl = bindReact(knobs);
 ```
 
-- `defineControls` registers the schema when the module is imported, on the server and in the browser. It touches no browser API.
+- `defineControls` returns a store bound to that schema. It touches no browser API. A project without React leaves out `bindReact`.
 - Control types are `number`, `toggle`, `select`, `text` and `color`. `about` is optional on a group or control. Object variables are a group whose controls are that object's fields, such as `product.price`.
+- Rows: `number` and `toggle` as today. `select` is a native select. `text` is a single-line input. `color` is a native color input with its hex value beside it.
 - `hidden: true` on a group removes its tab. `on <group>` at the prompt still opens it.
-- A control's `value` is its default. For a copy override, the default is the project's existing text, so an untouched control changes nothing.
+- A control's `value` is its default. For a copy override, the default is the project's existing text, so an untouched control changes nothing. `reset` restores this default, and "original" in the changed list and the decisions note means this default.
 
 ### Reading a value
 
 - `control('hero.variant')` returns the current value. `onControl(path, fn)` reports changes and returns a function that stops them.
-- `useControl('hero.variant')`, from `knobs/react`, re-renders the component on change. React is a peer dependency of that entry only.
+- `useControl('hero.variant')` re-renders the component on change. React is a peer dependency of `knobs/react` only. Reads inside a React render must use `useControl`, not `control`.
 - A read of a path not in the schema throws, so a typo fails where it is made.
+- Setting a value throws when there is no `window`, so the store on a server holds only the immutable schema and file values, and requests cannot affect each other.
 
 ### Value precedence and hydration
 
-A value resolves as: the browser's saved value, then `knobs.values.json`, then the default in `controls.js`.
+A value resolves as: the browser's saved value, then `knobs.values.json`, then the default in the controls file.
 
-On the server and through the first client render, reads return the file value or the default and never the browser's saved value. `mountKnobs` applies the browser's saved values after mount and notifies readers, so a server-rendered page does not hit a hydration mismatch.
+`useControl` is built on React's `useSyncExternalStore`. Its `getServerSnapshot` returns the file value or default, and its `getSnapshot` returns the live value. React renders the server snapshot during hydration and re-renders once if the live value differs, so a saved value causes no hydration mismatch, whenever it arrives.
 
 A saved value that no longer validates is ignored: a `select` value not in its options, a `number` that is not finite, a `color` that is not `#rrggbb`. Numbers clamp to their range, as they do now.
 
@@ -101,26 +106,33 @@ A saved value that no longer validates is ignored: a `select` value not in its o
 
 ```js
 import { mountKnobs } from 'knobs';
-mountKnobs({ name: 'my-project', commands, status, pages, visuals });
+import { knobs } from './controls';
+useEffect(() => mountKnobs(knobs, { name: 'my-project', commands, status, onFocus, extras, pages, visuals }), []);
 ```
 
-`name` namespaces every storage key and replaces each hardcoded `wings-vdb`. All other options keep their current meaning. Calling `mountKnobs` on the server is an error; the skill mounts it from client-only code.
+The skill calls `mountKnobs` from a `useEffect` in a client-only component, or after load in a project without React, so the drawer's DOM lands after hydration even in a framework that hydrates the whole document. It returns a function that unmounts the drawer. Calling it with no `window` is an error.
+
+`name` namespaces every storage key and replaces each hardcoded `wings-vdb`. All other options keep their current meaning.
+
+Built-in commands are `help`, `ls`, `get`, `set`, `reset`, `on`, `save`, `download [name]`, `load`, `export`, `import`, `clear` and `close`. `save` writes the values file through the Vite plugin. `download` is what wings-vdb's `save` does today, a JSON file to the browser. The `/` menu lists the built-in actions plus anything in `commands`. wings-vdb's `/shot` and the help line about `v` stay behind in wings-vdb. `~` opens the `performance` tab.
 
 The console, tabs, status line and label colors carry over: yellow for anything you can act on, light grey for the instrument side.
 
 ### Safe in another project
 
-- The drawer renders in a shadow DOM, so its CSS and the project's cannot collide.
+- The drawer renders in a shadow DOM, so its CSS and the project's cannot collide. Its stylesheet defines its own custom properties on the shadow host, carries its own button reset, uses a generic monospace font stack, and sets a z-index at the top of the range. `getComputedStyle` reads in the instrument code read from inside the shadow root.
+- The drawer sets no class on the page's `body`. A project that wants to react to it being open uses `onFocus`.
 - Backtick and `~` do nothing while focus is in an editable field, inside or outside the drawer. Inside a shadow DOM the listener reads `event.composedPath()`, because `event.target` is retargeted to the host.
-- A `text` value typed at the prompt takes the rest of the line, so it may contain spaces.
-- wings-vdb's name migrations, the `link` rule and the shader `uniform` field stay behind in wings-vdb.
+- For a `text` control, a value typed at the prompt is the rest of the line exactly. The console's `=`, `+=` and `-=` handling and its number coercion do not apply to it.
+- wings-vdb's name migrations, the `link` rule, the shader `uniform` field and its page layout rules stay behind in wings-vdb.
 
 ### Vite plugin
 
-`knobs/vite` does two jobs.
+`knobs/vite` does three jobs.
 
-- It adds a dev-only endpoint behind the drawer's `save` command, which writes `knobs.values.json`, keeping only values that differ from the defaults. It is built from the endpoint behind wings-vdb's `defaults` command.
-- It configures Vite for a symlinked dependency: `server.fs.allow` for the knobs checkout, `resolve.dedupe` for React, and `ssr.noExternal` for knobs, because the package ships source with no build step.
+- **Save endpoint.** A dev-only endpoint behind `save`, built from the one behind wings-vdb's `defaults` command. It writes one fixed path under the project root, `knobs.values.json`, keeping only values that differ from the defaults. Because a dev server may be shared with other devices, it accepts only POST, caps the body size, and refuses any path not in the schema or any value that does not validate.
+- **Full reloads.** Its `handleHotUpdate` turns any change to the controls file, `knobs.values.json` or a file in the knobs checkout into a full page reload, so components and the drawer can never end up bound to different stores. Saved values restore after the reload. A project not on Vite reloads by hand.
+- **Symlink settings.** `server.fs.allow` is `[searchForWorkspaceRoot(root), realpathSync(knobsDir)]`: setting `allow` turns off Vite's workspace detection, so the plugin has to restore it, and Vite serves the symlink's real path. `resolve.dedupe` for React is what prevents two copies of React, and is what the end-to-end run tests. A linked dependency is already left unexternalized in server rendering and is not pre-bundled, so `ssr.noExternal` and `optimizeDeps` need no entry.
 
 A project not on Vite uses `export`, which copies the values as JSON.
 
@@ -131,7 +143,7 @@ Plain browser JavaScript as ES modules, with no build step and no framework in t
 ### Instrument side
 
 - Every tab gets a default panel: a live list of what has changed in that group, each line showing the original and current value.
-- Custom pictures are opt-in through `visuals`, on request only. The drawing helpers from `viz.js` ship with the package.
+- Custom pictures are opt-in through `visuals`, on request only. The generic drawing helpers from `viz.js` (`makePen`, `canvasVisual`, `pixels`, `trace`, `fit`) ship with the package. wings-vdb's own pictures stay behind.
 - The `performance` tab shows frame rate and memory everywhere. Renderer and scene rows appear only if the project supplies them through a stats option.
 
 ### Coming back out
@@ -140,7 +152,7 @@ When Josh says the prototype is done, the knobs skill:
 
 1. Saves `knobs.values.json`, keeping only what differs from the defaults.
 2. Writes a short decisions note in the project's `docs/` with `wings-home docs new`: each changed control, its original value, what Josh chose, and where in the code it is read. The note names the prototype commit.
-3. Leaves the prototype branch as the reference.
+3. Asks Josh to commit the prototype branch, since the note names its commit and nothing commits without being asked, then leaves the branch as the reference.
 
 Production code gets the chosen values written in directly through a normal spec or plan. The drawer and its reads never reach production.
 
@@ -150,10 +162,11 @@ Written with write-skill in the skills repository. Its description fires when a 
 
 ## Testing
 
-- Unit tests with `node --test` for the store: registration, each type's validation, clamping, precedence, change notification, a read of an unknown path, and that `defineControls` touches no browser API.
-- Unit tests for console parsing of `text` values with spaces, and for the plugin's write keeping only changed values.
-- Browser tests on a small fixture page in this repository: the drawer mounts in a shadow DOM; a project's global CSS does not change it and its CSS does not reach the page; each control type updates a read; backtick is ignored while typing in a field on the page and in a `text` control; `hidden` groups have no tab and open with `on`; saved values survive a reload.
-- A browser test on a fixture using server-rendered React: no hydration warning with a saved value present, and the saved value appears after mount.
+- Unit tests with `node --test` for the store: each type's validation, clamping, precedence, change notification, a read of an unknown path, that a set with no `window` throws, and that `defineControls` touches no browser API. These pass values as objects rather than importing a JSON file.
+- Unit tests for console parsing of `text` values containing spaces, `=` and digits, and for the plugin's endpoint: keeping only changed values, and refusing unknown paths, invalid values and an oversized body.
+- Browser tests with Playwright on a small fixture page in this repository: the drawer mounts in a shadow DOM; a project's global CSS does not change it and its CSS does not reach the page; each control type updates a read; backtick is ignored while typing in a field on the page and in a `text` control; `hidden` groups have no tab and open with `on`; saved values survive a reload.
+- A browser test on server-rendered React fixtures, one that hydrates a root element and one that hydrates the whole document: no hydration warning with a saved value present, and the saved value appears after hydration.
+- A browser test that editing the controls file or the values file causes a full reload, and that the drawer still drives the page afterward.
 - One end-to-end run on a real project, through a symlinked install, to prove the Vite settings. It is the check that decides whether those settings are complete.
 
 ## Out of scope

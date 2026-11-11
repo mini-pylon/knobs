@@ -11,16 +11,26 @@ export function stepDecimals(step) {
   return Math.max(0, fraction - Number(exponent));
 }
 
+// Round to a count of decimals. toFixed stops at 100, so past that round by significant digits.
+function roundDecimals(n, decimals) {
+  if (decimals <= 100) return Number(n.toFixed(decimals));
+  if (n === 0) return n;
+  const digits = decimals + Number(n.toExponential().split('e')[1]) + 1;
+  // More digits than toPrecision takes is more than a double holds, so nothing rounds away.
+  if (digits > 100) return n;
+  if (digits > 0) return Number(n.toPrecision(digits));
+  // Below one unit of the last decimal: round to that unit or to zero, half away from zero.
+  const unit = Number(`1e-${decimals}`);
+  return Math.abs(n) * 2 >= unit ? Math.sign(n) * unit : 0;
+}
+
 export function normalize(control, value) {
   if (control.type === 'number') {
     if (typeof value !== 'number' || !Number.isFinite(value)) return { ok: false };
     // Adding 0 turns -0 into 0, so a value compares equal to itself after another pass.
     const clamp = n => Math.min(control.max, Math.max(control.min, n)) + 0;
-    const decimals = stepDecimals(control.step);
-    // toFixed stops at 100 decimals; a finer step already holds every value a double can.
-    if (decimals > 100) return { ok: true, value: clamp(value) };
     // Rounding can step past a bound that has more decimals than the step, so clamp again.
-    return { ok: true, value: clamp(Number(clamp(value).toFixed(decimals))) };
+    return { ok: true, value: clamp(roundDecimals(clamp(value), stepDecimals(control.step))) };
   }
   if (control.type === 'toggle') {
     if (value === true || value === 1) return { ok: true, value: 1 };

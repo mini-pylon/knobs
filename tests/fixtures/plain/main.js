@@ -17,7 +17,11 @@ const options = {
   name: 'fixture',
   commands: { ping: { usage: '[word]', about: 'answers pong', run: ([word]) => `pong ${word ?? ''}`.trim() } },
   status: () => { window.__statusCalls = (window.__statusCalls ?? 0) + 1; return 'status-ok'; },
-  onFocus: state => { window.__focus = state; },
+  onFocus: state => {
+    window.__focusCalls = (window.__focusCalls ?? 0) + 1;
+    if (params.has('lateFail') && state.open) throw new Error('focus failed');
+    window.__focus = state;
+  },
   extras: { get: () => ({ extra: 'kept' }), set: data => { window.__extras = data.extra; } },
   visuals: {
     scene: canvasVisual('A test picture', () => pen => { window.__frames++; window.__pen = { fg: pen.fg, dim: pen.dim }; }),

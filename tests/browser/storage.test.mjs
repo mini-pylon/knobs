@@ -87,3 +87,20 @@ test('a failure while mounting removes the host it appended', async () => {
   assert.equal(await page.locator('[data-knobs]').count(), 0);
   assert.ok(errors.some(error => error.includes('mount failed')));
 });
+
+test('a failure late in mounting releases everything mounting set up', async () => {
+  await page?.context().close();
+  page = await newPage(browser);
+  await page.addInitScript(() => sessionStorage.setItem('fixture:drawer', '1'));
+  errors = collectErrors(page);
+  await page.goto(`${site.url}?lateFail=1`);
+  await page.waitForFunction(() => window.__boots);
+  assert.equal(await page.locator('[data-knobs]').count(), 0);
+  assert.ok(errors.some(error => error.includes('focus failed')));
+  const calls = () => page.evaluate(() => [window.__statusCalls ?? 0, window.__focusCalls ?? 0]);
+  const before = await calls();
+  await page.keyboard.press('Backquote');
+  await page.waitForTimeout(700);
+  assert.deepEqual(await calls(), before);
+});
+

@@ -72,6 +72,17 @@ export function mountKnobs(store, options = {}) {
     </section>`;
   shadow.append(style, root);
   document.body.append(host);
+  // Each resource adds its release as soon as it is acquired, so unmount and
+  // a mount that fails partway release exactly what exists, newest first.
+  const release = [() => host.remove()];
+  function releaseAll() {
+    let first;
+    while (release.length) {
+      try { release.pop()(); }
+      catch (error) { first ??= error; }
+    }
+    return first;
+  }
   try {
     const tabs = root.querySelector('.term-tabs');
     const varsBox = root.querySelector('.term-vars');
@@ -83,16 +94,24 @@ export function mountKnobs(store, options = {}) {
     const body = root.querySelector('.term-body');
     const vizBox = root.querySelector('.term-viz');
     const panes = { console: root.querySelector('.term-console'), params: root.querySelector('.term-params') };
-    const mounted = [performancePage({ stats }), ...pages].map(page => {
+    const mounted = [];
+    release.push(() => {
+      for (const page of mounted) {
+        page.hide?.();
+        page.destroy?.();
+      }
+    });
+    for (const page of [performancePage({ stats }), ...pages]) {
       const node = document.createElement('div');
       node.className = `term-page term-page-${page.name}`;
       body.append(node);
       panes[page.name] = node;
-      return { ...page, node, panel: page.mount(node) };
-    });
+      mounted.push({ ...page, node, panel: page.mount(node) });
+    }
     root.querySelector('.term-prompt span').textContent = `${name} $`;
 
     store.attach(storageCall('localStorage'), `${name}:values`);
+    release.push(() => store.detach());
 
     const visibleGroups = () => store.groups.filter(group => !group.hidden);
     let active = new Set(visibleGroups()[0] ? [visibleGroups()[0].name] : []);
@@ -107,6 +126,14 @@ export function mountKnobs(store, options = {}) {
     let historyIndex = 0;
     let focusTimer = 0;
     const pendingDownloads = new Map();
+    release.push(() => {
+      clearTimeout(focusTimer);
+      for (const [url, timer] of pendingDownloads) {
+        clearTimeout(timer);
+        URL.revokeObjectURL(url);
+      }
+      pendingDownloads.clear();
+    });
 
     function print(text, cls = '') {
       for (const line of String(text).split('\n')) log.append(el('div', `term-line ${cls}`, line || ' '));
@@ -239,6 +266,10 @@ export function mountKnobs(store, options = {}) {
       else mountChanges(group);
     }
     wide.addEventListener('change', syncViz);
+    release.push(() => {
+      wide.removeEventListener('change', syncViz);
+      destroyViz();
+    });
 
     function renderVars() {
       rows.clear();
@@ -346,7 +377,7 @@ export function mountKnobs(store, options = {}) {
       row.slider.setAttribute('aria-valuenow', String(value));
       row.value.textContent = fmt(row.control, value);
     }
-    const unsubscribe = store.subscribe((value, path) => update(path));
+    release.push(store.subscribe((value, path) => update(path)));
 
     function resolve(controlName) {
       if (!controlName) return null;
@@ -650,12 +681,14 @@ export function mountKnobs(store, options = {}) {
       } else if (event.key === 'Escape' && root.classList.contains('open')) toggle(false);
     }
     window.addEventListener('keydown', onKey);
+    release.push(() => window.removeEventListener('keydown', onKey));
 
     const statusTimer = setInterval(() => {
       if (!root.classList.contains('open')) return;
       statusEl.textContent = status();
       currentPage()?.panel?.update?.();
     }, 250);
+    release.push(() => clearInterval(statusTimer));
 
     showPane();
     renderTabs();
@@ -664,26 +697,11 @@ export function mountKnobs(store, options = {}) {
     if (storageCall('sessionStorage', 'getItem', `${name}:drawer`) === '1') toggle(true);
 
     return function unmount() {
-      clearInterval(statusTimer);
-      clearTimeout(focusTimer);
-      for (const [url, timer] of pendingDownloads) {
-        clearTimeout(timer);
-        URL.revokeObjectURL(url);
-      }
-      pendingDownloads.clear();
-      window.removeEventListener('keydown', onKey);
-      wide.removeEventListener('change', syncViz);
-      destroyViz();
-      for (const page of mounted) {
-        page.hide?.();
-        page.destroy?.();
-      }
-      unsubscribe();
-      store.detach();
-      host.remove();
+      const error = releaseAll();
+      if (error) throw error;
     };
   } catch (error) {
-    host.remove();
+    releaseAll();
     throw error;
   }
 }

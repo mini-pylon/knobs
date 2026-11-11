@@ -1,7 +1,8 @@
-// The control drawer: a shadow host, one tab per group, and a console.
-// Pictures, project pages and the performance tab are added later.
+// The control drawer: a shadow host, one tab per group, a console, and
+// the instrument side (changed values, pictures, performance).
 import { stepDecimals } from './store.js';
 import { coerce, parseLine } from './console.js';
+import { performancePage } from './performance.js';
 import { css } from './style.js';
 
 const el = (tag, cls, text) => {
@@ -42,6 +43,9 @@ export function mountKnobs(store, options = {}) {
     status = () => '',
     onFocus = () => {},
     extras = { get: () => ({}), set: () => {} },
+    pages = [],
+    visuals = {},
+    stats,
   } = options;
   if (!name) throw new Error('knobs: mountKnobs needs a name');
 
@@ -79,7 +83,15 @@ export function mountKnobs(store, options = {}) {
   const fileInput = root.querySelector('.term-file');
   const slash = root.querySelector('.term-slash');
   const body = root.querySelector('.term-body');
+  const vizBox = root.querySelector('.term-viz');
   const panes = { console: root.querySelector('.term-console'), params: root.querySelector('.term-params') };
+  const mounted = [performancePage({ stats }), ...pages].map(page => {
+    const node = document.createElement('div');
+    node.className = `term-page term-page-${page.name}`;
+    body.append(node);
+    panes[page.name] = node;
+    return { ...page, node, panel: page.mount(node) };
+  });
   root.querySelector('.term-prompt span').textContent = `${name} $`;
 
   store.attach(localStorage, `${name}:values`);
@@ -108,9 +120,25 @@ export function mountKnobs(store, options = {}) {
     onFocus({ open: root.classList.contains('open'), groups: view === 'params' ? [...active] : [] });
   }
 
+  function currentPage() {
+    return mounted.find(page => page.name === view);
+  }
+
   function showPane() {
     root.dataset.view = view;
     for (const [pane, node] of Object.entries(panes)) node.hidden = pane !== view;
+    if (root.classList.contains('open')) currentPage()?.panel?.update?.();
+  }
+
+  function setView(next) {
+    if (next !== view && root.classList.contains('open')) currentPage()?.hide?.();
+    view = next;
+    showPane();
+    renderTabs();
+    notify();
+    if (root.classList.contains('open')) currentPage()?.show?.();
+    if (view === 'console' && root.classList.contains('open')) input.focus({ preventScroll: true });
+    syncViz();
   }
 
   function renderTabs() {
@@ -118,13 +146,15 @@ export function mountKnobs(store, options = {}) {
     consoleTab.type = 'button';
     consoleTab.setAttribute('aria-pressed', String(view === 'console'));
     consoleTab.title = 'console: type help, or / for actions';
-    consoleTab.onclick = () => {
-      view = 'console';
-      showPane();
-      renderTabs();
-      notify();
-      if (root.classList.contains('open')) input.focus({ preventScroll: true });
-    };
+    consoleTab.onclick = () => setView('console');
+    const pageTabs = mounted.map(page => {
+      const button = el('button', `term-tab${view === page.name ? ' active' : ''}`, page.label ?? page.name);
+      button.type = 'button';
+      button.setAttribute('aria-pressed', String(view === page.name));
+      button.title = page.about;
+      button.onclick = () => setView(page.name);
+      return button;
+    });
     const groupTabs = visibleGroups().map(group => {
       const on = view === 'params' && active.has(group.name);
       const button = el('button', `term-tab${on ? ' active' : ''}`, group.name);
@@ -132,13 +162,16 @@ export function mountKnobs(store, options = {}) {
       button.setAttribute('aria-pressed', String(on));
       button.title = group.about;
       button.onclick = () => {
-        view = 'params';
-        showPane();
+        if (view !== 'params') {
+          if (root.classList.contains('open')) currentPage()?.hide?.();
+          view = 'params';
+          showPane();
+        }
         setActive(new Set([group.name]));
       };
       return button;
     });
-    tabs.replaceChildren(consoleTab, ...groupTabs);
+    tabs.replaceChildren(consoleTab, ...pageTabs, ...groupTabs);
   }
 
   function setActive(next) {
@@ -147,7 +180,67 @@ export function mountKnobs(store, options = {}) {
     renderTabs();
     renderVars();
     notify();
+    syncViz();
   }
+
+  // The right side of a params tab: the project's picture, or what changed.
+  // Only the showing tab's panel exists, and a picture draws only while it shows.
+  const wide = matchMedia('(min-width: 761px)');
+  let vizKey = null;
+  let vizRaf = 0;
+  let stopViz = () => {};
+  function destroyViz() {
+    cancelAnimationFrame(vizRaf);
+    vizRaf = 0;
+    stopViz();
+    stopViz = () => {};
+    vizBox.replaceChildren();
+    vizKey = null;
+  }
+  function mountChanges(group) {
+    const stop = store.subscribe((value, path) => {
+      if (!path.startsWith(`${group.name}.`)) return;
+      render();
+    });
+    function render() {
+      const changed = group.controls.filter(control => !Object.is(store.control(control.path), control.default));
+      if (!changed.length) {
+        vizBox.textContent = 'nothing changed';
+        return;
+      }
+      vizBox.replaceChildren(...changed.map(control => el(
+        'div',
+        'term-changes-line',
+        `${control.key}  ${fmt(control, control.default)} → ${fmt(control, store.control(control.path))}`,
+      )));
+    }
+    render();
+    stopViz = () => stop();
+  }
+  function mountPicture(group) {
+    const visual = visuals[group.name](vizBox);
+    let last = 0;
+    const loop = now => {
+      vizRaf = requestAnimationFrame(loop);
+      if (now - last < 66) return;
+      last = now;
+      visual.frame(now / 1000);
+    };
+    vizRaf = requestAnimationFrame(loop);
+    stopViz = () => { visual.destroy?.(); };
+  }
+  function syncViz() {
+    const group = view === 'params' ? store.groups.find(item => active.has(item.name)) : null;
+    const showing = Boolean(root.classList.contains('open') && group && wide.matches);
+    const next = !showing ? null : visuals[group.name] ? `visual:${group.name}` : `panel:${group.name}`;
+    if (next === vizKey) return;
+    destroyViz();
+    if (!next) return;
+    vizKey = next;
+    if (next.startsWith('visual:')) mountPicture(group);
+    else mountChanges(group);
+  }
+  wide.addEventListener('change', syncViz);
 
   function renderVars() {
     rows.clear();
@@ -526,21 +619,33 @@ export function mountKnobs(store, options = {}) {
     input.focus({ preventScroll: true });
   });
 
+  function showView(pageName) {
+    if (!root.classList.contains('open')) toggle(true);
+    setView(pageName);
+  }
+
   function toggle(open = !root.classList.contains('open')) {
+    const was = root.classList.contains('open');
     root.classList.toggle('open', open);
     notify();
     try { sessionStorage.setItem(`${name}:drawer`, open ? '1' : '0'); } catch { /* session storage can be blocked */ }
     clearTimeout(focusTimer);
     if (open && view === 'console') focusTimer = setTimeout(() => input.focus({ preventScroll: true }), 160);
     else if (shadow.activeElement) shadow.activeElement.blur();
+    if (open && !was) currentPage()?.show?.();
+    if (!open && was) currentPage()?.hide?.();
+    syncViz();
   }
   root.querySelector('.term-close').addEventListener('click', () => toggle(false));
 
   function onKey(event) {
-    if (event.key === '`' && !event.ctrlKey && !event.metaKey) {
+    if ((event.key === '`' || event.key === '~') && !event.ctrlKey && !event.metaKey) {
       if (isEditable(event)) return;
       event.preventDefault();
-      toggle();
+      if (event.key === '~') {
+        if (root.classList.contains('open') && view === 'performance') toggle(false);
+        else showView('performance');
+      } else toggle();
     } else if (event.key === 'Escape' && root.classList.contains('open')) toggle(false);
   }
   window.addEventListener('keydown', onKey);
@@ -548,6 +653,7 @@ export function mountKnobs(store, options = {}) {
   const statusTimer = setInterval(() => {
     if (!root.classList.contains('open')) return;
     statusEl.textContent = status();
+    currentPage()?.panel?.update?.();
   }, 250);
 
   showPane();
@@ -561,6 +667,12 @@ export function mountKnobs(store, options = {}) {
     clearTimeout(focusTimer);
     clearTimeout(revokeTimer);
     window.removeEventListener('keydown', onKey);
+    wide.removeEventListener('change', syncViz);
+    destroyViz();
+    for (const page of mounted) {
+      page.hide?.();
+      page.destroy?.();
+    }
     unsubscribe();
     store.detach();
     host.remove();

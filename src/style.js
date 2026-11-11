@@ -59,13 +59,13 @@ input, select { font: inherit; color: inherit; background: none; border: 0; padd
 .term-value { text-align: right; font-variant-numeric: tabular-nums; }
 .term-row select, .term-row input[type="text"] { width: 100%; min-width: 0; }
 .term-row input[type="color"] { width: 100%; height: 14px; }
-.term-page-perf { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; padding: 0 var(--pad); min-height: 0; }
+.term-page-performance { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; padding: 0 var(--pad); min-height: 0; }
 .perf-stats { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
 .perf-row { display: grid; grid-template-columns: 10ch minmax(0, 1fr); gap: 16px; white-space: nowrap; }
 .perf-key { color: var(--term-fg); }
 .perf-value { overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .perf-chart { width: 100%; height: 100%; min-height: 0; display: block; }
-@media (max-width: 760px) { .term-page-perf { grid-template-columns: 1fr; } .perf-chart { display: none; } }
+@media (max-width: 760px) { .term-page-performance { grid-template-columns: 1fr; } .perf-chart { display: none; } }
 .term-console { position: relative; display: flex; flex-direction: column; min-height: 0; }
 .term-slash { position: absolute; left: 8px; right: 8px; z-index: 2; }
 .term-slash-item { display: grid; grid-template-columns: 7ch 13ch minmax(0, 1fr); gap: 10px; padding: 2px 10px; cursor: pointer; white-space: nowrap; }

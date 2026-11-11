@@ -21,11 +21,11 @@ worktree: /home/jmo/linda/repos/knobs/.worktrees/spec-control-drawer
 ## Global Constraints
 
 - Base commit `5ffe803` on `spec-control-drawer`. It holds a README and `docs/`, with no `package.json` and no tests, so the starting test count is 0.
-- Test counts when each milestone ends. Milestone 1: 102 unit (package 5, store 51, console 46). Milestone 2: 108 unit (adds index 3, instruments 3) and 44 browser (drawer 16, commands 22, instruments 6). Milestone 3: 146 unit (adds endpoint 27, vite-plugin 11) and 49 browser (adds vite 5). Milestone 4: 154 unit (adds react 6, types 2) and 58 browser (adds ssr 9). Milestone 5 adds the end-to-end run, in two modes. A count that differs is recorded and explained in the closing report.
-- Every test in this plan was run against a throwaway reference implementation before the plan was written, and the key behaviours were broken on purpose to confirm a test fails. A test that seems impossible to pass means the implementation has drifted from the description. Stop and report it; never change the test.
+- Test counts when each milestone ends. Milestone 1: 102 unit (package 5, store 51, console 46). Milestone 2: 108 unit (adds index 3, instruments 3) and 50 browser (drawer 13, commands 27, instruments 10). Milestone 3: 148 unit (adds endpoint 29, vite-plugin 11) and 55 browser (adds vite 5). Milestone 4: 156 unit (adds react 6, types 2) and 64 browser (adds ssr 9). Milestone 5 adds the end-to-end run, in two modes. A count that differs is recorded and explained in the closing report.
+- Every test in this plan was run against a throwaway reference implementation before the plan was written, and the key behaviours were broken on purpose to confirm a test fails. Tasks 5 and 6's tests were also run against the reference cut back to the task before, and every one failed, so build each task to its description and no further: doing a later task's work early makes its tests pass before implementation, which stops the run. A test that seems impossible to pass means the implementation has drifted from the description. Stop and report it; never change the test.
 - The source to port is frozen in `~/.cache/knobs/drawer-source/` (`terminal.js`, `params.js`, `viz.js`, `perf.js`, `style.css`, `vite.config.js`, `defaults.mjs`), because the wings-vdb drawer is still changing. Read those copies. Never read or edit `~/linda/repos/wings-vdb`. The probe in Task 1 pins them by hash.
 - The live environment: `wings-vdb-dev.service` holds port 5350 and other services hold many ports around it. Tests ask the operating system for a free port and never use a fixed one. The real project in Task 11 is only ever copied to a temporary directory. Its dev config proxies `/dufs` to a live folder, so the run blocks those requests in the browser. Never run anything inside `~/linda/repos/drop`.
-- Dependencies: a worktree starts with no `node_modules`, so run `npm ci --prefer-offline --ignore-scripts` first. Headless sandboxes may have no network, so the driver warms the npm cache before launching Milestone 1, in a fresh temporary directory holding a minimal `package.json`, with `npm install --ignore-scripts --save-dev --save-exact vite@8.3.8 react@19.3.1 react-dom@19.3.1 playwright@1.63.0 typescript@5.9.3`. Before Milestone 5 the driver also warms it with `npm ci --ignore-scripts` in a temporary copy of `drop` at `ff45f97`.
+- Dependencies: a worktree starts with no `node_modules`, so run `npm ci --prefer-offline --ignore-scripts` first. Headless sandboxes may have no network, so the driver warms the npm cache before launching Milestone 1, in a fresh temporary directory holding a minimal `package.json`, with `npm install --ignore-scripts --save-dev --save-exact vite@8.3.8 react@19.3.1 react-dom@19.3.1 playwright@1.64.1 typescript@5.9.3`. Before Milestone 5 the driver also warms it with `npm ci --ignore-scripts` in a temporary copy of `drop` at `ff45f97`.
 - Unit tests: `npm run test:unit`. They take under a few seconds and may run directly.
 - The browser suite and the end-to-end run each run as a check job, never backgrounded by hand: `~/linda/skills/handoff-launch/scripts/launch-headless job --repo <worktree> --topic <topic> --cost 1 -- paced env KNOBS_CHROMIUM=/home/jmo/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome npm run test:browser`. Wait until `.status` in `<run dir>/meta.json` is not `running`; the output is `<run dir>/stdout.log`. Exit 8 means not admitted: report it rather than looping.
 - Commits go through git-commit, staged by path. The last line of every commit message is exactly `Generated with wings.computer`, with no harness or model named. Never `git add -A`, never push.
@@ -41,8 +41,8 @@ Where the spec was wrong or silent, this plan decided:
 5. **No extra file watcher.** Vite already watches files it imports from outside the root, so `handleHotUpdate` sees changes in the knobs checkout without one.
 6. **The browser stores only what differs from the file value.** Otherwise a later edit to `knobs.values.json` would be masked by every value the browser ever held. A reset over a differing file value stores the default, so it survives a reload. A stored value equal to the file value is pruned on load.
 7. **A file value that does not validate is ignored,** like a saved one, and numbers from the file clamp.
-8. **Group names and control keys must match `\w+`,** so a path can be split from the console's `=`, `+=` and `-=`.
-9. **"Editable field" means** a text-like `input`, a `textarea`, or anything `contenteditable`. A range, checkbox, color input or select is not one. The prompt is an editable field and takes focus when the console opens, so backtick there types a backtick and Escape closes the drawer.
+8. **Group names and control keys must match `\w+`,** so a path can be split from the console's `=`, `+=` and `-=`. A generated key must be camelCase, such as `fontSize`, and the knobs skill must say so.
+9. **"Editable field" means** a text-like `input`, a `textarea`, or anything `contenteditable`. A range, checkbox, color input or select is not one. The prompt is an editable field and takes focus when the console opens, so backtick there types a backtick and Escape closes the drawer. The greeting says so.
 10. **A text value is everything after one separating whitespace character,** trailing spaces included. A text control with no separator is an error, and with a separator and nothing after it sets an empty string. A `select` value takes the rest of the line the same way. A color takes the normal path and is refused unless it validates.
 11. **The save endpoint refuses rather than clamps.** A number out of range or off its step is a 422, as the wings-vdb endpoint refuses out-of-range values, because the browser only ever sends normalized values.
 12. **`export` and `download` carry only changed values,** matching the values file.
@@ -53,7 +53,7 @@ Where the spec was wrong or silent, this plan decided:
 17. **The real project is `drop` at `ff45f97`:** Vite 8, React 19, TypeScript and Tailwind's global reset, which is the CSS collision the spec worries about.
 18. **The knobs skill is outside this build.** It belongs to another repository, so it cannot be a milestone of a run in this one. See After the build.
 
-- Checked 2026-11-11 at 5ffe803: 11 apply blocks, 15 reds as quoted, 5 probes pass.
+- Checked 2026-11-11 at 5ffe803: 11 apply blocks, 14 reds as quoted, 5 probes pass.
 
 ## Review Focus
 
@@ -63,13 +63,12 @@ Where the spec was wrong or silent, this plan decided:
 4. A controls file that imports more than `knobs`. The stub covers `knobs/react` only, so a controls file importing another linked package would still fail to load in Node.
 5. Real browsers. Tests run only on Chromium. `all: initial !important` on the host, the `translate` property and a native color input inside a shadow root need a look in Safari.
 6. Vite 6 and 7. Only Vite 8 is run, and the plugin reaches into `exports['.']` to find the project's copy.
-7. Two saves at once. The file write is atomic, but the later request wins and nothing orders them.
 
 ## Milestones
 
 - **Milestone 1: the store and console** (Tasks 1 to 3). Ends with the package shape, the value store and console parsing passing in Node with no browser. Reviewer brief: confirm `defineControls` touches no browser API at import or call time, that the store's returned functions work destructured, and that precedence matches the spec's Value precedence section.
 - **Milestone 2: the drawer** (Tasks 4 to 6). Ends with the drawer running on a fixture page in a shadow DOM with every control type, command and key. Reviewer brief: check Review Focus 2, 3 and 5, confirm no string `wings-vdb` remains in `src/`, and confirm the page's `body` is never touched.
-- **Milestone 3: the Vite plugin** (Tasks 7 and 8). Ends with `save` writing the values file and edits causing full reloads. Reviewer brief: check Review Focus 1 and 7, and confirm `src/vite.js` has no static import of `vite`.
+- **Milestone 3: the Vite plugin** (Tasks 7 and 8). Ends with `save` writing the values file and edits causing full reloads. Reviewer brief: check Review Focus 1, and confirm `src/vite.js` has no static import of `vite`.
 - **Milestone 4: React and types** (Tasks 9 and 10). Ends with server-rendered React fixtures hydrating without a warning and a TypeScript consumer compiling. Reviewer brief: confirm only `src/react.js` imports React, and that `getServerSnapshot` never reads a saved value.
 - **Milestone 5: a real project** (Task 11). Ends with the end-to-end run passing in both modes. Reviewer brief: check Review Focus 4 and 6, read both logs, and confirm nothing wrote inside the `drop` checkout.
 
@@ -169,7 +168,7 @@ node --test tests/unit/package.test.mjs
 no such file or directory
 ```
 
-**Implementation.** Write `package.json` with `name` `knobs`, `version` `0.1.0`, `private` true, `type` `module`, and `files` of `src` and `types`. `exports` maps `.`, `./react` and `./vite` each to `types` under `./types/` and `default` under `./src/` (`index`, `react`, `vite`). `scripts` holds `test:unit` as `node --test "tests/unit/*.test.mjs"` and `test:browser` as `node --test --test-concurrency=1 "tests/browser/*.test.mjs"`, and no build or prepare script. `peerDependencies` are `react` `>=18` and `vite` `>=6.1`, both optional through `peerDependenciesMeta`. There are no `dependencies`. Install the dev tools exactly, with `npm install --prefer-offline --ignore-scripts --save-dev --save-exact vite@8.3.8 react@19.3.1 react-dom@19.3.1 playwright@1.63.0 typescript@5.9.3`. Write `.gitignore` with `node_modules/`, `tests/.tmp/` and `.worktrees/`.
+**Implementation.** Write `package.json` with `name` `knobs`, `version` `0.1.0`, `private` true, `type` `module`, and `files` of `src` and `types`. `exports` maps `.`, `./react` and `./vite` each to `types` under `./types/` and `default` under `./src/` (`index`, `react`, `vite`). `scripts` holds `test:unit` as `node --test "tests/unit/*.test.mjs"` and `test:browser` as `node --test --test-concurrency=1 "tests/browser/*.test.mjs"`, and no build or prepare script. `peerDependencies` are `react` `>=18` and `vite` `>=6.1`, both optional through `peerDependenciesMeta`. There are no `dependencies`. Install the dev tools exactly, with `npm install --prefer-offline --ignore-scripts --save-dev --save-exact vite@8.3.8 react@19.3.1 react-dom@19.3.1 playwright@1.64.1 typescript@5.9.3`, the Playwright release that ships the pinned chromium-1248. Write `.gitignore` with `node_modules/`, `tests/.tmp/` and `.worktrees/`.
 
 **Check:** `node --test tests/unit/package.test.mjs` passes 5.
 
@@ -589,11 +588,11 @@ src/console.js' imported from
 
 **Commit:** `feat(console): parse the prompt`
 
-### Task 4: the drawer in a shadow DOM
+### Task 4: the drawer shell and its rows
 
-**Files:** create `src/drawer.js`, `src/style.js`, `src/instruments.js`, `src/performance.js`, `src/index.js`, `tests/browser/lib/harness.mjs`, `tests/browser/drawer.test.mjs`, `tests/unit/index.test.mjs`, `tests/unit/instruments.test.mjs`, and the fixture `tests/fixtures/plain/`.
+**Files:** create `src/drawer.js`, `src/style.js`, `src/instruments.js`, `src/index.js`, `tests/browser/lib/harness.mjs`, `tests/browser/drawer.test.mjs`, `tests/unit/index.test.mjs`, `tests/unit/instruments.test.mjs`, and the fixture `tests/fixtures/plain/`.
 
-**Interfaces.** `mountKnobs(store, { name, commands, status, onFocus, extras, pages, visuals, stats })` returns a function that unmounts the drawer. `src/index.js` exports exactly `defineControls`, `mountKnobs`, `makePen`, `canvasVisual`, `pixels`, `trace` and `fit`. The host element carries `data-knobs` set to `name`. These class names are what the tests read and must be kept: `term`, `open`, `term-drawer`, `term-tab`, `active`, `term-status`, `term-log`, `term-prompt`, `term-row` (with `data-path`), `term-key`, `term-value`, `term-viz`, `term-file`, `term-slash-name`, `perf-key`, `perf-value`, `viz-chart`. Row controls carry `aria-label` set to the control's path: a `[role=slider]` for a number, a `button` for a toggle, a `select`, and an `input` for text and color.
+**Interfaces.** `mountKnobs(store, { name, commands, status, onFocus, extras, pages, visuals, stats })` returns a function that unmounts the drawer. `src/index.js` exports exactly `defineControls`, `mountKnobs`, `makePen`, `canvasVisual`, `pixels`, `trace` and `fit`. The host element carries `data-knobs` set to `name`. These class names are what the tests read and must be kept: `term`, `open`, `term-drawer`, `term-tab`, `active`, `term-status`, `term-log`, `term-prompt`, `term-row` (with `data-path`), `term-key`, `term-value`, `term-viz`, `term-file`, `term-slash-name`, `term-page-<name>`, `perf-key`, `perf-value`, `viz-chart`. Row controls carry `aria-label` set to the control's path: a `[role=slider]` for a number, a `button` for a toggle, a `select`, and an `input` for text and color.
 
 ```bash apply
 mkdir -p tests/browser tests/browser/lib tests/fixtures/plain tests/unit
@@ -680,7 +679,7 @@ cat > tests/browser/drawer.test.mjs <<'PLAN_EOF'
 import '../../src/drawer.js';
 import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { collectErrors, copyFixture, launch, newPage, logText, openDrawer, serve, type } from './lib/harness.mjs';
+import { collectErrors, copyFixture, launch, newPage, openDrawer, serve } from './lib/harness.mjs';
 
 let fixture, site, browser, page, errors;
 
@@ -740,10 +739,11 @@ test('the drawer\'s CSS does not reach the page', async () => {
   assert.deepEqual(style, { padding: '50px', display: 'block' });
 });
 
-test('the console tab is named after the project, then performance, then the groups', async () => {
+test('the console tab is named after the project and each group has a tab', async () => {
   await fresh();
   await openDrawer(page);
-  assert.deepEqual(await page.locator('.term-tab').allTextContents(), ['fixture', 'performance', 'hero', 'scene']);
+  const names = await page.locator('.term-tab').allTextContents();
+  assert.deepEqual(names.filter(name => name !== 'performance'), ['fixture', 'hero', 'scene']);
   assert.equal(await page.locator('.term-prompt span').textContent(), 'fixture $');
 });
 
@@ -814,60 +814,27 @@ test('a color row is a native color input with its hex beside it', async () => {
   assert.equal(await page.locator('[data-path="hero.accent"] .term-value').textContent(), '#112233');
 });
 
-test('a value set at the prompt shows in its row', async () => {
-  await fresh();
-  await openDrawer(page);
-  await type(page, 'hero.title Typed at the prompt');
-  await tab('hero').click();
-  assert.equal(await page.locator('input[aria-label="hero.title"]').inputValue(), 'Typed at the prompt');
-});
-
-test('a text value at the prompt is the rest of the line', async () => {
-  await fresh();
-  await openDrawer(page);
-  await type(page, 'hero.title a = b  12');
-  assert.equal(await read('hero-title'), 'a = b  12');
-});
-
-test('a value that does not validate is refused at the prompt', async () => {
-  await fresh();
-  await openDrawer(page);
-  await type(page, 'hero.variant nope');
-  assert.match(await logText(page), /hero\.variant: invalid value: nope/);
-  await type(page, 'hero.accent red');
-  assert.match(await logText(page), /hero\.accent: invalid value: red/);
-  assert.equal(await read('hero-variant'), 'split');
-});
-
-test('numbers clamp and += works at the prompt', async () => {
-  await fresh();
-  await openDrawer(page);
-  await type(page, 'hero.overlay 3');
-  assert.match(await logText(page), /hero\.overlay = 1\.00 {2}\(clamped to 0\.\.1\)/);
-  await type(page, 'hero.overlay -= .5');
-  assert.equal(await read('hero-overlay'), '0.5');
-});
-
-test('a hidden group has no tab and opens with on', async () => {
+test('a hidden group has no tab', async () => {
   await fresh();
   await openDrawer(page);
   assert.equal(await tab('product').count(), 0);
-  await type(page, 'on product');
-  assert.equal(await page.locator('[role=slider][aria-label="product.price"]').count(), 1);
-  assert.equal(await tab('product').count(), 0);
 });
 
-test('labels you can act on are yellow and instrument labels are light grey', async () => {
+test('backtick toggles the drawer', async () => {
   await fresh();
-  await openDrawer(page);
-  await page.locator('.term-tab').nth(1).click();
-  await page.locator('.perf-key').first().waitFor();
-  const colors = await page.evaluate(() => {
-    const root = document.querySelector('[data-knobs]').shadowRoot;
-    return { tab: getComputedStyle(root.querySelectorAll('.term-tab')[2]).color, perf: getComputedStyle(root.querySelector('.perf-key')).color };
-  });
-  assert.deepEqual(colors, { tab: 'rgb(232, 197, 71)', perf: 'rgb(216, 225, 232)' });
-  assert.deepEqual(errors, []);
+  await page.keyboard.press('Backquote');
+  assert.equal(await page.locator('.term.open').count(), 1);
+  await page.waitForTimeout(250);
+  await page.locator('.term-prompt input').blur();
+  await page.keyboard.press('Backquote');
+  assert.equal(await page.locator('.term.open').count(), 0);
+});
+
+test('the drawer uses a generic monospace stack', async () => {
+  await fresh();
+  const family = await page.evaluate(() => getComputedStyle(document.querySelector('[data-knobs]').shadowRoot.querySelector('.term')).fontFamily);
+  assert.match(family, /monospace/);
+  assert.doesNotMatch(family, /Areal/);
 });
 PLAN_EOF
 cat > tests/unit/index.test.mjs <<'PLAN_EOF'
@@ -1007,7 +974,7 @@ window.__frames = 0;
 const options = {
   name: 'fixture',
   commands: { ping: { usage: '[word]', about: 'answers pong', run: ([word]) => `pong ${word ?? ''}`.trim() } },
-  status: () => 'status-ok',
+  status: () => { window.__statusCalls = (window.__statusCalls ?? 0) + 1; return 'status-ok'; },
   onFocus: state => { window.__focus = state; },
   extras: { get: () => ({ extra: 'kept' }), set: data => { window.__extras = data.extra; } },
   visuals: {
@@ -1015,6 +982,7 @@ const options = {
   },
 };
 if (params.has('stats')) options.stats = () => ({ renderer: 'test renderer', scene: 'test scene' });
+if (params.has('pages')) options.pages = [{ name: 'notes', label: 'my notes', about: 'a project page', mount(el) { el.textContent = 'page body'; return { update() { window.__pageUpdates = (window.__pageUpdates ?? 0) + 1; } }; } }];
 const mount = () => mountKnobs(knobs, options);
 window.__unmount = mount();
 window.__mount = () => { window.__unmount = mount(); };
@@ -1045,19 +1013,19 @@ node --test tests/browser/drawer.test.mjs
 src/drawer.js' imported from
 ```
 
-**Implementation.** Port `terminal.js` from the frozen source into `src/drawer.js`, taking the store as an argument in place of the `params` import and using `name` for the prompt, greeting, console tab, file names and every storage key (`<name>:values`, `<name>:groups`, `<name>:drawer`). Throw `knobs: mountKnobs needs a browser` with no `window`, before anything else, and `knobs: mountKnobs needs a name` with no name. Append a host `div` to `document.body`, attach an open shadow root, and put a `style` element and the drawer inside it. Call `store.attach(localStorage, ...)` at mount. Never set a class on `body`. Drop the `term-strip` handle.
+**Implementation.** Port the markup, tabs and rows of the frozen `terminal.js` into `src/drawer.js`, taking the store as an argument in place of the `params` import and using `name` for the prompt label and console tab. Throw `knobs: mountKnobs needs a browser` with no `window`, before anything else, and `knobs: mountKnobs needs a name` with no name. Append a host `div` to `document.body`, attach an open shadow root, and put a `style` element and the drawer inside it. Never set a class on `body`. Drop the `term-strip` handle. This task's only key is backtick, toggling the drawer with no other check. The prompt is present but does nothing yet. The returned unmount function may do nothing yet.
 
-`src/style.js` exports the stylesheet as a string named `css`, ported from the drawer rules in the frozen `style.css`. The `:host` rule needs `all: initial !important` and then `display`, `position: fixed`, `inset` and `z-index: 2147483647`, each `!important`: a page rule such as `* { color: red !important }` matches the host, and only an important rule from inside the shadow tree beats it. It also defines the `--term-*` properties, `--drawer`, `--pad` and a generic `--mono` stack on the host, and carries its own `button` and `input, select` resets. `.term` has `position: relative`; it has no height of its own, so visibility is judged on `.term-drawer`.
+`src/style.js` exports the stylesheet as a string named `css`, ported from the drawer rules in the frozen `style.css`. The `:host` rule needs `all: initial !important` and then `display`, `position: fixed`, `inset` and `z-index: 2147483647`, each `!important`: a page rule such as `* { color: red !important }` matches the host, and only an important rule from inside the shadow tree beats it. It also defines the `--term-*` properties, `--drawer`, `--pad` and a `--mono` stack on the host. Leave `ABC Areal Mono` out of that stack, so it starts at `ui-monospace` and ends at `monospace`. It carries its own `button` and `input, select` resets. `.term` has `position: relative`; it has no height of its own, so visibility is judged on `.term-drawer`.
 
-Add rows for `select` (native), `text` (`type=text`, set on `input`) and `color` (native, set on `input`, hex in `.term-value`), and have `update` write a field's value only when it differs. Replace `resolve`, `run` and `setCommand` with `parseLine` and `coerce`: an invalid value prints `<path>: invalid value: <value>` in the error style, and a clamped number keeps today's `(clamped to min..max)` note. Tabs are the console, then `performance`, then any `pages`, then each group not `hidden`. `on <group>` works for a hidden group.
+Tabs are the console, then each group not `hidden`. Keep the number and toggle rows, and add rows for `select` (native), `text` (`type=text`, set on `input`) and `color` (native, set on `input`, hex in `.term-value`). `update` writes a field's value only when it differs. The frozen `fmt` calls `toFixed` on anything but a toggle, so it must return strings as they are for the new types.
 
-`src/instruments.js` carries `makePen`, `canvasVisual`, `pixels`, `trace` and `fit` from the frozen `viz.js`, with the `TRACE` constant, unchanged. `src/performance.js` is a page named `performance`, with `fps` measured from its own frame loop and `memory` rows. Its `show` and `hide` start and stop the loop, and `destroy` cancels it. Rows from `stats()` are added after those two.
+`src/instruments.js` carries `makePen`, `canvasVisual`, `pixels`, `trace` and `fit` from the frozen `viz.js`, with the `TRACE` constant, unchanged.
 
-**Check:** `node --test tests/unit/index.test.mjs tests/unit/instruments.test.mjs` passes 6, and the browser check job for `tests/browser/drawer.test.mjs` passes 16.
+**Check:** `node --test tests/unit/index.test.mjs tests/unit/instruments.test.mjs` passes 6, and the browser check job for `tests/browser/drawer.test.mjs` passes 13.
 
 **Commit:** `feat(drawer): mount the drawer in a shadow DOM`
 
-### Task 5: keys, storage and commands
+### Task 5: the prompt, keys, storage and teardown
 
 **Files:** edit `src/drawer.js`; create `tests/browser/commands.test.mjs`.
 
@@ -1092,17 +1060,7 @@ async function fresh() {
 }
 const isOpen = () => page.locator('.term.open').count().then(Boolean);
 const read = id => page.locator(`#read-${id}`).textContent();
-
-test('backtick toggles the drawer', async () => {
-  await fresh();
-  await page.keyboard.press('Backquote');
-  assert.equal(await isOpen(), true);
-  await page.locator('.term-prompt input').blur();
-  await page.waitForTimeout(250);
-  await page.locator('.term-prompt input').blur();
-  await page.keyboard.press('Backquote');
-  assert.equal(await isOpen(), false);
-});
+const tab = name => page.locator('.term-tab', { hasText: new RegExp(`^${name}$`) });
 
 for (const id of ['page-input', 'page-textarea', 'page-editable']) {
   test(`backtick and tilde are ignored while typing in #${id}`, async () => {
@@ -1139,15 +1097,6 @@ test('Escape closes the drawer from the prompt', async () => {
   assert.equal(await isOpen(), false);
 });
 
-test('tilde opens the performance tab, and closes it again', async () => {
-  await fresh();
-  await page.keyboard.press('Shift+Backquote');
-  assert.equal(await isOpen(), true);
-  assert.equal(await page.locator('.term').getAttribute('data-view'), 'performance');
-  await page.keyboard.press('Shift+Backquote');
-  assert.equal(await isOpen(), false);
-});
-
 test('onFocus reports the drawer and the showing group', async () => {
   await fresh();
   await openDrawer(page);
@@ -1175,9 +1124,8 @@ test('the open drawer and tab survive a reload', async () => {
   await page.locator('.term-tab', { hasText: /^scene$/ }).click();
   await page.reload();
   await page.locator('.term.open .term-drawer').waitFor();
-  await page.locator('.term-tab', { hasText: /^fixture$/ }).click();
-  await page.locator('.term-tab', { hasText: /^performance$/ }).click();
   assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('fixture:groups'))), ['scene']);
+  assert.equal(await page.locator('.term-tab.active').textContent(), 'fixture');
 });
 
 test('mountKnobs restores saved values and notifies a listener already subscribed', async () => {
@@ -1233,12 +1181,15 @@ test('reset takes a control, a group or nothing', async () => {
   await fresh();
   await openDrawer(page);
   await type(page, 'hero.title Changed');
+  assert.equal(await read('hero-title'), 'Changed');
   await type(page, 'reset hero.title');
   assert.equal(await read('hero-title'), 'The original headline');
   await type(page, 'hero.overlay 0.9');
+  assert.equal(await read('hero-overlay'), '0.9');
   await type(page, 'reset hero');
   assert.equal(await read('hero-overlay'), '0.4');
   await type(page, 'hero.badge off');
+  assert.equal(await read('hero-badge'), '0');
   await type(page, 'reset');
   assert.equal(await read('hero-badge'), '1');
 });
@@ -1295,6 +1246,69 @@ test('save without the plugin says so', async () => {
   await type(page, 'save');
   await page.waitForFunction(() => document.querySelector('[data-knobs]').shadowRoot.querySelector('.term-log').textContent.includes('save needs the knobs Vite plugin'));
 });
+
+test('a value set at the prompt shows in its row', async () => {
+  await fresh();
+  await openDrawer(page);
+  await type(page, 'hero.title Typed at the prompt');
+  await tab('hero').click();
+  assert.equal(await page.locator('input[aria-label="hero.title"]').inputValue(), 'Typed at the prompt');
+});
+
+test('a text value at the prompt is the rest of the line', async () => {
+  await fresh();
+  await openDrawer(page);
+  await type(page, 'hero.title a = b  12');
+  assert.equal(await read('hero-title'), 'a = b  12');
+});
+
+test('a value that does not validate is refused at the prompt', async () => {
+  await fresh();
+  await openDrawer(page);
+  await type(page, 'hero.variant nope');
+  assert.match(await logText(page), /hero\.variant: invalid value: nope/);
+  await type(page, 'hero.accent red');
+  assert.match(await logText(page), /hero\.accent: invalid value: red/);
+  assert.equal(await read('hero-variant'), 'split');
+});
+
+test('numbers clamp and += works at the prompt', async () => {
+  await fresh();
+  await openDrawer(page);
+  await type(page, 'hero.overlay 3');
+  assert.match(await logText(page), /hero\.overlay = 1\.00 {2}\(clamped to 0\.\.1\)/);
+  await type(page, 'hero.overlay -= .5');
+  assert.equal(await read('hero-overlay'), '0.5');
+});
+
+test('a hidden group opens with on, and still has no tab', async () => {
+  await fresh();
+  await openDrawer(page);
+  await type(page, 'on product');
+  assert.equal(await page.locator('[role=slider][aria-label="product.price"]').count(), 1);
+  assert.equal(await tab('product').count(), 0);
+});
+
+test('clear empties the log and close hides the drawer', async () => {
+  await fresh();
+  await openDrawer(page);
+  await type(page, 'help');
+  await type(page, 'clear');
+  assert.equal((await logText(page)).trim(), '');
+  await type(page, 'close');
+  assert.equal(await isOpen(), false);
+});
+
+test('no timer survives unmounting', async () => {
+  await fresh();
+  await openDrawer(page);
+  await page.waitForFunction(() => window.__statusCalls > 0);
+  await page.evaluate(() => window.__unmount());
+  await page.waitForTimeout(50);
+  await page.evaluate(() => { window.__statusCalls = 0; });
+  await page.waitForTimeout(700);
+  assert.equal(await page.evaluate(() => window.__statusCalls), 0);
+});
 PLAN_EOF
 ```
 
@@ -1306,23 +1320,27 @@ node --test tests/browser/commands.test.mjs
 src/drawer.js' imported from
 ```
 
-Once Task 4 is built, this file runs and the tests for what is still missing fail by name. Some may pass at once.
+That is the failure with no implementation at all. On a tree where Task 4 is built, the file runs and all 27 tests fail.
 
-**Implementation.** One `keydown` listener on `window`. Escape closes an open drawer from anywhere. For backtick and `~`, do nothing with Ctrl or Meta held, or when `event.composedPath()[0]` is an editable field (decision 9); `event.target` is retargeted to the host and must not be used. `~` opens `performance`, or closes the drawer if it is already showing. Use `shadow.activeElement` where the source used `document.activeElement`.
+**Implementation.** Port the console from the frozen source, replacing `resolve`, `run` and `setCommand` with `parseLine` and `coerce`. An invalid value prints `<path>: invalid value: <value>` in the error style, and a clamped number keeps today's `(clamped to min..max)` note. `on <group>` works for a hidden group.
 
-Built-ins are `help`, `ls`, `get`, `reset`, `on`, `save`, `download [name]`, `load`, `export`, `import`, `clear` and `close`, plus `set` through the parser. `help` leaves out `/shot` and the `v` line. `import` parses the parser's `rest`, never the joined `args`, or it would collapse spaces inside a text value. `export` prints and copies `store.changed()`. `download` is the frozen source's `saveConfig`, with `values` from `store.changed()` and the anchor appended inside the shadow root. `load` keeps `extras.set`. `save` POSTs `{ values: store.changed() }` as JSON to `/__knobs/save` and prints `saved <n> values to knobs.values.json`; a 404 prints `save needs the knobs Vite plugin; use export`, and any other failure prints the server's `error`. The `/` menu lists `save`, `download`, `load` and `reset`, then each entry of `commands`.
+Keys: Escape closes an open drawer from anywhere. Backtick does nothing with Ctrl or Meta held, or when `event.composedPath()[0]` is an editable field (decision 9); `event.target` is retargeted to the host and must not be used. Use `shadow.activeElement` where the source used `document.activeElement`. The greeting ends with a backtick, then `opens this drawer, Esc closes it`.
 
-Keep every other behaviour of the frozen source: history, tab completion, the slash menu's keys, double-click reset, the click-to-focus rule, the saved open state and group.
+Call `store.attach(localStorage, `<name>:values`)` at mount. Keep the saved open state and group under `<name>:drawer` and `<name>:groups`. Wire `onFocus` and the status line.
+
+Built-ins are `help`, `ls`, `get`, `reset`, `on`, `save`, `download [name]`, `load`, `export`, `import`, `clear` and `close`, plus `set` through the parser. `help` says `control` wherever the source says `var` or `variable`: `ls [group]`, `get <control>`, `set <control> <value>`, `reset [control|group]`, `on <group>`, `import <json>`, `download [name]`. It leaves out `/shot` and the `v` line. `ls` shows a number's range as `[min..max]` and a select's options as `[a b c]`, and nothing for other types. `get` prints `<path> = <value>  (default <default>)`, with two spaces and no range, and `about` on the next line when there is one. `import` parses the parser's `rest`, never the joined `args`, or it would collapse spaces inside a text value. `export` prints and copies `store.changed()`. `download` is the frozen source's `saveConfig`, with `values` from `store.changed()`, the anchor appended inside the shadow root and the file named from `name`. `load` keeps `extras.set`. `save` POSTs `{ values: store.changed() }` as JSON to `/__knobs/save` and prints `saved <n> values to knobs.values.json`; a 404 prints `save needs the knobs Vite plugin; use export`, and any other failure prints the server's `error`. The `/` menu lists `save`, `download`, `load` and `reset`, then each entry of `commands`.
+
+Keep every other behaviour of the frozen source: history, tab completion, the slash menu's keys, double-click reset, the click-to-focus rule.
 
 `unmount` clears the interval and focus timer, cancels frame loops, removes the `window` and media query listeners and the store subscription, calls each page's and visual's `destroy`, calls `store.detach()`, and removes the host.
 
-**Check:** the browser check job for `tests/browser/commands.test.mjs` passes 22.
+**Check:** the browser check job for `tests/browser/commands.test.mjs` passes 27.
 
-**Commit:** `feat(drawer): add keys, storage and commands`
+**Commit:** `feat(drawer): add the prompt, keys, storage and teardown`
 
 ### Task 6: the instrument side
 
-**Files:** edit `src/drawer.js`, `src/performance.js`; create `tests/browser/instruments.test.mjs`.
+**Files:** create `src/performance.js`, `tests/browser/instruments.test.mjs`; edit `src/drawer.js`.
 
 ```bash apply
 mkdir -p tests/browser
@@ -1407,15 +1425,65 @@ test('performance adds rows the project supplies through stats', async () => {
   assert.equal(await page.locator('.perf-value').nth(2).textContent(), 'test renderer');
 });
 
-test('performance stops sampling when it is not showing', async () => {
+test('labels you can act on are yellow and instrument labels are light grey', async () => {
   await fresh();
-  await page.evaluate(() => {
-    window.__raf = 0;
-    const real = window.requestAnimationFrame;
-    window.requestAnimationFrame = fn => { window.__raf++; return real(fn); };
+  await openDrawer(page);
+  await page.locator('.term-tab').nth(1).click();
+  await page.locator('.perf-key').first().waitFor();
+  const colors = await page.evaluate(() => {
+    const root = document.querySelector('[data-knobs]').shadowRoot;
+    return { tab: getComputedStyle(root.querySelectorAll('.term-tab')[2]).color, perf: getComputedStyle(root.querySelector('.perf-key')).color };
   });
+  assert.deepEqual(colors, { tab: 'rgb(232, 197, 71)', perf: 'rgb(216, 225, 232)' });
+  assert.deepEqual(errors, []);
+});
+
+test('tilde opens the performance tab, and closes it again', async () => {
+  await fresh();
+  await page.keyboard.press('Shift+Backquote');
+  assert.equal(await page.locator('.term.open').count(), 1);
+  assert.equal(await page.locator('.term').getAttribute('data-view'), 'performance');
+  await page.keyboard.press('Shift+Backquote');
+  assert.equal(await page.locator('.term.open').count(), 0);
+});
+
+const countFrames = () => page.evaluate(() => {
+  window.__raf = 0;
+  const real = window.requestAnimationFrame;
+  window.requestAnimationFrame = fn => { window.__raf++; return real(fn); };
+});
+
+test('performance samples only while it shows', async () => {
+  await fresh();
+  await countFrames();
+  await page.keyboard.press('Shift+Backquote');
+  await page.waitForFunction(() => window.__raf > 2, undefined, { polling: 100 });
+  await page.keyboard.press('Shift+Backquote');
+  await page.waitForTimeout(100);
+  await page.evaluate(() => { window.__raf = 0; });
   await page.waitForTimeout(300);
   assert.equal(await page.evaluate(() => window.__raf), 0);
+});
+
+test('no frame loop survives unmounting', async () => {
+  await fresh();
+  await countFrames();
+  await page.keyboard.press('Shift+Backquote');
+  await page.waitForFunction(() => window.__raf > 2, undefined, { polling: 100 });
+  await page.evaluate(() => window.__unmount());
+  await page.waitForTimeout(100);
+  await page.evaluate(() => { window.__raf = 0; });
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => window.__raf), 0);
+});
+
+test('project pages get tabs after performance and before the groups', async () => {
+  await fresh('?pages=1');
+  await openDrawer(page);
+  assert.deepEqual(await page.locator('.term-tab').allTextContents(), ['fixture', 'performance', 'my notes', 'hero', 'scene']);
+  await tab('my notes').click();
+  assert.equal(await page.locator('.term-page-notes').textContent(), 'page body');
+  await page.waitForFunction(() => window.__pageUpdates > 0);
 });
 PLAN_EOF
 ```
@@ -1428,9 +1496,15 @@ node --test tests/browser/instruments.test.mjs
 src/instruments.js' imported from
 ```
 
-**Implementation.** Each params tab's right side shows `visuals[group]` if the project gave one, otherwise a default panel. The panel lists every control in that group whose value differs from its default, one `.term-changes-line` each, as `<key>  <original> → <current>` with two spaces after the key, or `nothing changed` when there are none. It redraws from a store subscription limited to its group and stops on `destroy`. Only the showing tab's panel exists. It is hidden below 761 px, as the picture is today. A picture's `frame` runs only while its tab shows in an open drawer. The performance loop runs only while its tab shows.
+That is the failure with no implementation at all. On a tree where Tasks 4 and 5 are built, the file runs and all 10 tests fail.
 
-**Check:** the check job for the whole browser suite passes 44, and `npm run test:unit` passes 108. `grep -rn "wings-vdb" src/` prints nothing.
+**Implementation.** `src/performance.js` exports `performancePage({ stats })`, a page named `performance` with `fps` measured from its own frame loop and `memory` rows, then a row for each entry of `stats()`, and a canvas chart of frame rate. Its `show` and `hide` start and stop the loop, and `destroy` cancels it. Pages may define `update`, `show`, `hide` and `destroy`.
+
+Tabs become the console, `performance`, any `pages`, then the groups. The drawer calls `show` on the showing page while it is open and `hide` otherwise. `~` follows the same rules as backtick, opens `performance`, and closes the drawer if it is already showing.
+
+Each params tab's right side shows `visuals[group]` if the project gave one, otherwise a default panel. The panel lists every control in that group whose value differs from its default, one `.term-changes-line` each, as `<key>  <original> → <current>` with two spaces after the key, or `nothing changed` when there are none. It redraws from a store subscription limited to its group and stops on `destroy`. Only the showing tab's panel exists. It is hidden below 761 px, as the picture is today. A picture's `frame` runs only while its tab shows in an open drawer.
+
+**Check:** the check job for the whole browser suite passes 50, and `npm run test:unit` passes 108. `grep -rn "wings-vdb" src/` prints nothing.
 
 **Commit:** `feat(drawer): add the changed list and performance page`
 
@@ -1445,7 +1519,7 @@ mkdir -p tests/unit
 cat > tests/unit/endpoint.test.mjs <<'PLAN_EOF'
 import test, { after, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { request, createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -1516,7 +1590,6 @@ test('it writes only the fixed path, whatever the body says', async () => {
 
 test('it leaves no temporary file behind', async () => {
   await post({ body: values({ 'hero.title': 'x' }) });
-  const { readdirSync } = await import('node:fs');
   assert.deepEqual(readdirSync(root), [VALUES_FILE]);
 });
 
@@ -1538,12 +1611,22 @@ for (const [name, options, status] of [
   ['a body that is not JSON', { body: '{nope' }, 400],
   ['a body with no values', { body: '{}' }, 400],
   ['values that are an array', { body: JSON.stringify({ values: [] }) }, 400],
+  ['values that are null', { body: JSON.stringify({ values: null }) }, 400],
   ['an oversized body', { body: values({ 'hero.title': 'x'.repeat(3000) }) }, 413],
 ]) test(`it refuses ${name} and leaves the file unchanged`, async () => {
   const res = await post(options);
   assert.equal(res.status, status);
   assert.equal(typeof res.json.error, 'string');
   unchanged();
+});
+
+test('overlapping saves all succeed and leave one whole file', async () => {
+  for (let round = 0; round < 20; round++) {
+    const results = await Promise.all(['a', 'b', 'c'].map(title => post({ body: values({ 'hero.title': title }) })));
+    assert.deepEqual(results.map(r => r.status), [200, 200, 200]);
+    assert.match(JSON.parse(readFileSync(file, 'utf8'))['hero.title'], /^[abc]$/);
+    assert.deepEqual(readdirSync(root), [VALUES_FILE]);
+  }
 });
 
 test('it accepts a charset on the content type', async () => {
@@ -1586,9 +1669,9 @@ node --test tests/unit/endpoint.test.mjs
 src/save-endpoint.js' imported from
 ```
 
-**Implementation.** Check in this order, answering JSON with an `error` string: not POST is 405; a content type other than `application/json`, ignoring parameters and case, is 415; an origin that is missing, unparsable, or neither matching `Host` by host nor listed in `origins` by origin is 403. Forwarded headers are never read. Read the body up to `limit`, answering 413 once it has ended if it went over. JSON that does not parse, or `values` that is missing, not an object, or an array, is 400. Call `loadStore`; any failure is 500. Each path must be in `store.byPath` and `normalize` must return the identical value, or the answer is 422 and nothing is written. Keep values that differ from the default, sorted by path. Write `JSON.stringify(kept, null, 2)` and a newline to a temporary file beside the target, rename it over `knobs.values.json`, and answer `{ saved: <count> }`.
+**Implementation.** Check in this order, answering JSON with an `error` string: not POST is 405; a content type other than `application/json`, ignoring parameters and case, is 415; an origin that is missing, unparsable, or neither matching `Host` by host nor listed in `origins` by origin is 403. Forwarded headers are never read. Read the body up to `limit`, answering 413 once it has ended if it went over. JSON that does not parse, or `values` that is missing, not an object, or an array, is 400. Call `loadStore`; any failure is 500. Each path must be in `store.byPath` and `normalize` must return the identical value, or the answer is 422 and nothing is written. Keep values that differ from the default, sorted by path. Write through one promise chain per handler, so overlapping saves run one at a time and the later arrival wins: `JSON.stringify(kept, null, 2)` and a newline to a temporary file beside the target with a unique name per write, renamed over `knobs.values.json`. Answer `{ saved: <count> }`.
 
-**Check:** `node --test tests/unit/endpoint.test.mjs` passes 27.
+**Check:** `node --test tests/unit/endpoint.test.mjs` passes 29.
 
 **Commit:** `feat(vite): add the save endpoint`
 
@@ -1809,13 +1892,13 @@ node --test tests/browser/vite.test.mjs
 src/vite.js' imported from
 ```
 
-**Implementation.** Throw `knobs: the Vite plugin needs the controls file path` with no `controls`. There is no static import of `vite` (decision 2). In `config`, take the root from the user's config or the working directory, resolve `vite/package.json` with `createRequire` from the project root, read its `exports['.']` (a string, or an object's `import`, which may itself hold `default`), and import that file. Return `server.fs.allow` as the project copy's `searchForWorkspaceRoot(root)` plus the real path of this package's directory, and `resolve.dedupe` of `react` and `react-dom`. Return nothing for `ssr` or `optimizeDeps`.
+**Implementation.** Throw `knobs: the Vite plugin needs the controls file path` with no `controls`. There is no static import of `vite` (decision 2). In `config`, take the root from the user's config or the working directory, resolved to an absolute path, make the controls path absolute against it, resolve `vite/package.json` with `createRequire` from the project root, read its `exports['.']` (a string, or an object's `import`, which may itself hold `default`), and import that file. Return `server.fs.allow` as the project copy's `searchForWorkspaceRoot(root)` plus the real path of this package's directory, and `resolve.dedupe` of `react` and `react-dom`. Return nothing for `ssr` or `optimizeDeps`.
 
-`configureServer` mounts `createSaveHandler` on `SAVE_ROUTE`. Its `loadStore` calls the project copy's `runnerImport` on the controls file, fresh each time, with `configFile: false` and `logLevel: 'silent'`, the resolved config's aliases, and an alias placed first from `/^knobs\/react$/` to `src/react-stub.js` (decision 1). It throws if the module exports no `knobs` store.
+`configureServer` mounts `createSaveHandler` on `SAVE_ROUTE`. Its `loadStore` calls the project copy's `runnerImport` on the controls file, fresh each time, with that `root`, `configFile: false` and `logLevel: 'silent'`, the resolved config's aliases, and an alias placed first from `/^knobs\/react$/` to `src/react-stub.js` (decision 1). It throws if the module exports no `knobs` store.
 
-`handleHotUpdate` sends `{ type: 'full-reload' }` and returns an empty list for the controls file, the values file, or a file under this package's directory, compared with a trailing separator so a sibling directory sharing the prefix does not match. Anything else returns undefined. `src/react-stub.js`'s `bindReact` returns a function that throws `knobs: useControl cannot run while the Vite plugin loads the schema`, and imports nothing.
+`handleHotUpdate` sends `{ type: 'full-reload' }` and returns an empty list for the controls file, the values file, or a file under this package's directory, compared with a trailing separator so a sibling directory sharing the prefix does not match. Anything else returns undefined. Keep `handleHotUpdate` even though Vite marks it for future replacement by `hotUpdate`: that hook fires once per environment and would reload twice. `src/react-stub.js`'s `bindReact` returns a function that throws `knobs: useControl cannot run while the Vite plugin loads the schema`, and imports nothing.
 
-**Check:** `npm run test:unit` passes 146, and the whole browser suite passes 49.
+**Check:** `npm run test:unit` passes 148, and the whole browser suite passes 55.
 
 **Commit:** `feat(vite): add the plugin`
 
@@ -2047,7 +2130,7 @@ src/react.js' imported from
 
 **Implementation.** `useControl` calls `useSyncExternalStore` with a `subscribe` memoized on `path` that wraps `store.onControl`, a client snapshot of `store.control(path)`, and a server snapshot of `store.fileValue(path)`. The server snapshot must never read a live value, so a saved value cannot cause a mismatch whenever it arrives. Only this file imports React.
 
-**Check:** `node --test tests/unit/react.test.mjs` passes 6, and the whole browser suite passes 58.
+**Check:** `node --test tests/unit/react.test.mjs` passes 6, and the whole browser suite passes 64.
 
 **Commit:** `feat(react): add useControl`
 
@@ -2131,7 +2214,7 @@ no such file or directory
 
 **Implementation.** Hand-written declarations. Controls are a union discriminated on `type`, so a number requires `min`, `max` and `step` and a select requires `options`. `Store` declares `control`, `fileValue`, `onControl`, `subscribe`, `set`, `reset` and `changed`; `control` returns `number | string`. `MountOptions` requires `name`. `types/react.d.ts` needs no React types. `types/vite.d.ts` imports `Plugin` from `vite` as a type and requires `controls`. The consumer's `@ts-expect-error` lines must each be a real error.
 
-**Check:** `npm run test:unit` passes 154.
+**Check:** `npm run test:unit` passes 156.
 
 **Commit:** `feat(types): add type declarations`
 
@@ -2316,15 +2399,7 @@ process.exit(0);
 PLAN_EOF
 ```
 
-```bash red
-node tests/e2e/real-project.mjs
-```
-
-```expected
-src/vite.js' imported from
-```
-
-This task adds no planned source. The spec names this run as the check that decides whether the Vite settings are complete, so if it fails, fix `src/vite.js`, or the file the failure names, and record what was wrong and why in the closing report. If it passes at once, say so.
+This task has no red: it is a check script over what Milestones 3 and 4 built, and adds no planned source. The spec names this run as the check that decides whether the Vite settings are complete, so if it fails, fix `src/vite.js`, or the file the failure names, and record what was wrong and why in the closing report. If it passes at once, say so.
 
 **Check:** run it as two check jobs, using `-- paced env KNOBS_CHROMIUM=/home/jmo/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome node tests/e2e/real-project.mjs /home/jmo/linda/repos/drop`, and again with `--own-react` added. Each log ends `e2e: ok`. Then confirm `git -C /home/jmo/linda/repos/drop status --short` prints nothing.
 

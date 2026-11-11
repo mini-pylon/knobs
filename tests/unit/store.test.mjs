@@ -334,3 +334,62 @@ test('attach ignores storage that throws on every read and write', t => {
   assert.equal(knobs.control('hero.title'), 'Live');
   assert.deepEqual(seen, [['hero.title', 'Live']]);
 });
+
+// Storage that can be switched to throw on reads, writes, or both.
+function switchable(initial = {}) {
+  const map = new Map(Object.entries(initial));
+  const fail = { read: false, write: false };
+  return {
+    map,
+    fail,
+    getItem(key) {
+      if (fail.read) throw new Error('blocked');
+      return map.has(key) ? map.get(key) : null;
+    },
+    setItem(key, value) {
+      if (fail.write) throw new Error('blocked');
+      map.set(key, String(value));
+    },
+  };
+}
+
+test('a failed read on reattach keeps the values set in memory', t => {
+  inBrowser(t);
+  const storage = switchable();
+  const knobs = defineControls(schema());
+  knobs.attach(storage, 'k');
+  knobs.set('hero.title', 'Saved');
+  storage.fail.read = true;
+  storage.fail.write = true;
+  knobs.set('hero.overlay', 0.7);
+  knobs.detach();
+  const seen = [];
+  knobs.subscribe((value, path) => seen.push([path, value]));
+  knobs.attach(storage, 'k');
+  assert.equal(knobs.control('hero.title'), 'Saved');
+  assert.equal(knobs.control('hero.overlay'), 0.7);
+  assert.deepEqual(seen, []);
+});
+
+test('a failed read never writes over what storage holds', t => {
+  inBrowser(t);
+  const storage = switchable({ k: JSON.stringify({ 'hero.title': 'Stored' }) });
+  storage.fail.read = true;
+  defineControls(schema()).attach(storage, 'k');
+  assert.deepEqual(JSON.parse(storage.map.get('k')), { 'hero.title': 'Stored' });
+});
+
+test('a write that failed is not undone by an older stored copy on reattach', t => {
+  inBrowser(t);
+  const storage = switchable();
+  const knobs = defineControls(schema());
+  knobs.attach(storage, 'k');
+  knobs.set('hero.title', 'Older');
+  storage.fail.write = true;
+  knobs.set('hero.title', 'Newer');
+  knobs.detach();
+  storage.fail.write = false;
+  knobs.attach(storage, 'k');
+  assert.equal(knobs.control('hero.title'), 'Newer');
+  assert.deepEqual(JSON.parse(storage.map.get('k')), { 'hero.title': 'Newer' });
+});

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { storageCall } from '../../src/store.js';
+import { storageCall, storageTry } from '../../src/store.js';
 
 test('removeItem that throws does not escape', () => {
   const storage = {
@@ -29,4 +29,12 @@ test('a blocked storage area reads and writes as nothing', () => {
   } finally {
     delete globalThis.localStorage;
   }
+});
+
+test('storageTry tells a failed call from a missing value', () => {
+  const missing = { getItem: () => null };
+  const blocked = { getItem() { throw new Error('blocked'); } };
+  assert.deepEqual(storageTry(missing, 'getItem', 'k'), { ok: true, value: null });
+  assert.deepEqual(storageTry(blocked, 'getItem', 'k'), { ok: false });
+  assert.deepEqual(storageTry(null, 'getItem', 'k'), { ok: false });
 });

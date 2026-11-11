@@ -71,15 +71,26 @@ function browserError() {
 // throw when storage is blocked, full, or in a private window. Callers
 // keep going; only the persisted copy is lost.
 export function storageCall(area, method, ...args) {
+  if (!method) {
+    if (typeof area !== 'string') return area ?? null;
+    try { return globalThis[area] ?? null; }
+    catch { return null; }
+  }
+  const result = storageTry(area, method, ...args);
+  return result.ok ? result.value : null;
+}
+
+// The same call, telling a failure ({ ok: false }) from a value that is
+// simply absent ({ ok: true, value: null }).
+export function storageTry(area, method, ...args) {
   let storage = area;
   if (typeof area === 'string') {
     try { storage = globalThis[area]; }
-    catch { return null; }
+    catch { return { ok: false }; }
   }
-  if (!method) return storage ?? null;
-  if (!storage) return null;
-  try { return storage[method](...args); }
-  catch { return null; }
+  if (!storage) return { ok: false };
+  try { return { ok: true, value: storage[method](...args) }; }
+  catch { return { ok: false }; }
 }
 
 export function defineControls(groups, fileValues = {}) {
@@ -144,6 +155,8 @@ export function defineControls(groups, fileValues = {}) {
   const subscribers = new Set();
   let storage = null;
   let storageKey = null;
+  // True while the last write to storage failed.
+  let unsaved = false;
 
   function requirePath(path) {
     if (!byPath.has(path)) throw new Error(`knobs: unknown control: ${path}`);
@@ -165,7 +178,7 @@ export function defineControls(groups, fileValues = {}) {
     for (const [path] of byPath) {
       if (saved.has(path)) out[path] = saved.get(path);
     }
-    storageCall(storage, 'setItem', storageKey, JSON.stringify(out));
+    unsaved = !storageTry(storage, 'setItem', storageKey, JSON.stringify(out)).ok;
   }
 
   function remember(path, value) {
@@ -239,9 +252,17 @@ export function defineControls(groups, fileValues = {}) {
     requireBrowser();
     storage = nextStorage;
     storageKey = key;
+    // What is in memory is newer than storage when the last write failed,
+    // and storage cannot be read at all when the read fails: either way,
+    // keep the values in memory and try to save them again.
+    const read = unsaved ? { ok: false } : storageTry(storage, 'getItem', key);
+    if (!read.ok) {
+      if (unsaved) persist();
+      return;
+    }
     let data = {};
     try {
-      const raw = storageCall(storage, 'getItem', key);
+      const raw = read.value;
       if (raw != null && raw !== '') {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) data = parsed;

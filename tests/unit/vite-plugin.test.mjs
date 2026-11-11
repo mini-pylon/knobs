@@ -68,6 +68,23 @@ for (const [name, file] of [
   assert.deepEqual(sent, [{ type: 'full-reload' }]);
 });
 
+// Vite 6 runs configureServer before its host check and the function it
+// returns after, so the save route must wait for the returned function.
+test('the save route is mounted after Vite\'s own middleware, host check included', async t => {
+  const root = project(t);
+  const plugin = knobs({ controls: 'controls.js' });
+  await plugin.config({ root });
+  const mounted = [];
+  const server = { middlewares: { use: (route, handler) => mounted.push({ route, handler }) } };
+  const after = plugin.configureServer(server);
+  assert.deepEqual(mounted, []);
+  assert.equal(typeof after, 'function');
+  after();
+  assert.equal(mounted.length, 1);
+  assert.equal(mounted[0].route, '/__knobs/save');
+  assert.equal(typeof mounted[0].handler, 'function');
+});
+
 test('a change to any other file is left to Vite', async t => {
   const root = project(t);
   const plugin = knobs({ controls: 'controls.js' });

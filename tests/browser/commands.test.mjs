@@ -306,3 +306,51 @@ test('no timer survives unmounting', async () => {
   await page.waitForTimeout(700);
   assert.equal(await page.evaluate(() => window.__statusCalls), 0);
 });
+
+async function trackObjectUrls() {
+  await page.evaluate(() => {
+    const created = [];
+    const revoked = [];
+    const create = URL.createObjectURL;
+    const revoke = URL.revokeObjectURL;
+    URL.createObjectURL = blob => {
+      const url = create.call(URL, blob);
+      created.push(url);
+      return url;
+    };
+    URL.revokeObjectURL = url => {
+      revoked.push(url);
+      return revoke.call(URL, url);
+    };
+    window.__urls = { created, revoked };
+  });
+}
+
+test('a second download still revokes the first object URL', async () => {
+  await fresh();
+  await openDrawer(page);
+  await trackObjectUrls();
+  const first = page.waitForEvent('download');
+  await type(page, 'download one');
+  await first;
+  const second = page.waitForEvent('download');
+  await type(page, 'download two');
+  await second;
+  await page.waitForTimeout(1200);
+  const urls = await page.evaluate(() => window.__urls);
+  assert.deepEqual([...urls.revoked].sort(), [...urls.created].sort());
+  assert.equal(urls.created.length, 2);
+});
+
+test('unmount revokes a download object URL that is still pending', async () => {
+  await fresh();
+  await openDrawer(page);
+  await trackObjectUrls();
+  const download = page.waitForEvent('download');
+  await type(page, 'download now');
+  await download;
+  await page.waitForFunction(() => window.__urls.created.length === 1);
+  await page.evaluate(() => window.__unmount());
+  const urls = await page.evaluate(() => window.__urls);
+  assert.deepEqual(urls.revoked, urls.created);
+});

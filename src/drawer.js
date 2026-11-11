@@ -106,7 +106,7 @@ export function mountKnobs(store, options = {}) {
     const history = [];
     let historyIndex = 0;
     let focusTimer = 0;
-    let revokeTimer = 0;
+    const pendingDownloads = new Map();
 
     function print(text, cls = '') {
       for (const line of String(text).split('\n')) log.append(el('div', `term-line ${cls}`, line || ' '));
@@ -404,8 +404,11 @@ export function mountKnobs(store, options = {}) {
       shadow.append(link);
       link.click();
       link.remove();
-      clearTimeout(revokeTimer);
-      revokeTimer = setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const timer = setTimeout(() => {
+        pendingDownloads.delete(url);
+        URL.revokeObjectURL(url);
+      }, 1000);
+      pendingDownloads.set(url, timer);
       print(`saved ${file}`);
     }
 
@@ -663,7 +666,11 @@ export function mountKnobs(store, options = {}) {
     return function unmount() {
       clearInterval(statusTimer);
       clearTimeout(focusTimer);
-      clearTimeout(revokeTimer);
+      for (const [url, timer] of pendingDownloads) {
+        clearTimeout(timer);
+        URL.revokeObjectURL(url);
+      }
+      pendingDownloads.clear();
       window.removeEventListener('keydown', onKey);
       wide.removeEventListener('change', syncViz);
       destroyViz();

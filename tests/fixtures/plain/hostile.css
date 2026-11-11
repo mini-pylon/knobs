@@ -1,0 +1,6 @@
+:root { --term-act: rgb(255, 0, 0); --term-fg: rgb(255, 0, 0); }
+* { color: rgb(255, 0, 0) !important; font-size: 40px !important; }
+button { padding: 50px; }
+.term-key, .term-tab { display: none !important; }
+body { letter-spacing: 9px; text-transform: uppercase; }
+[data-knobs] { opacity: 0.1 !important; }

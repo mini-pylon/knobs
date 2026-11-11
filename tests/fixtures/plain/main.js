@@ -25,6 +25,7 @@ const options = {
 };
 if (params.has('stats')) options.stats = () => ({ renderer: 'test renderer', scene: 'test scene' });
 if (params.has('pages')) options.pages = [{ name: 'notes', label: 'my notes', about: 'a project page', mount(el) { el.textContent = 'page body'; return { update() { window.__pageUpdates = (window.__pageUpdates ?? 0) + 1; } }; } }];
+if (params.has('broken')) options.pages = [{ name: 'bad', mount() { throw new Error('mount failed'); } }];
 const mount = () => mountKnobs(knobs, options);
 window.__unmount = mount();
 window.__mount = () => { window.__unmount = mount(); };

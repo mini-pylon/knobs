@@ -274,3 +274,63 @@ test('a saved value equal to the file value is pruned on attach', t => {
   defineControls(schema(), { 'hero.title': 'File' }).attach(storage, 'k');
   assert.deepEqual(JSON.parse(storage.map.get('k')), {});
 });
+
+// A full quota throws from setItem. The first write is the one attach makes.
+function fullAfter(writes) {
+  let count = 0;
+  const map = new Map();
+  return {
+    map,
+    getItem: key => (map.has(key) ? map.get(key) : null),
+    setItem(key, value) {
+      count += 1;
+      if (count > writes) throw new Error('full');
+      map.set(key, String(value));
+    },
+    removeItem() { throw new Error('full'); },
+  };
+}
+
+test('a set still changes the live value when storage is full', t => {
+  inBrowser(t);
+  const storage = fullAfter(1);
+  const knobs = defineControls(schema());
+  const seen = [];
+  knobs.subscribe((value, path) => seen.push([path, value]));
+  knobs.attach(storage, 'k');
+  assert.equal(knobs.set('hero.title', 'Live'), true);
+  assert.equal(knobs.control('hero.title'), 'Live');
+  assert.deepEqual(seen, [['hero.title', 'Live']]);
+  assert.deepEqual(JSON.parse(storage.map.get('k')), {});
+});
+
+test('a reset still changes the live value when storage is full', t => {
+  inBrowser(t);
+  const storage = fullAfter(2);
+  const knobs = defineControls(schema());
+  const seen = [];
+  knobs.subscribe((value, path) => seen.push([path, value]));
+  knobs.attach(storage, 'k');
+  knobs.set('hero.title', 'Live');
+  knobs.reset(['hero.title']);
+  assert.equal(knobs.control('hero.title'), 'The original headline');
+  assert.deepEqual(seen, [['hero.title', 'Live'], ['hero.title', 'The original headline']]);
+});
+
+test('attach ignores storage that throws on every read and write', t => {
+  inBrowser(t);
+  const storage = {
+    getItem() { throw new Error('blocked'); },
+    setItem() { throw new Error('blocked'); },
+    removeItem() { throw new Error('blocked'); },
+  };
+  const knobs = defineControls(schema());
+  const seen = [];
+  knobs.subscribe((value, path) => seen.push([path, value]));
+  knobs.attach(storage, 'k');
+  assert.equal(knobs.control('hero.title'), 'The original headline');
+  assert.deepEqual(seen, []);
+  assert.equal(knobs.set('hero.title', 'Live'), true);
+  assert.equal(knobs.control('hero.title'), 'Live');
+  assert.deepEqual(seen, [['hero.title', 'Live']]);
+});

@@ -1,0 +1,89 @@
+import '../../src/drawer.js';
+import test, { after, before } from 'node:test';
+import assert from 'node:assert/strict';
+import { collectErrors, copyFixture, launch, newPage, openDrawer, serve, type } from './lib/harness.mjs';
+
+let fixture, site, browser, page, errors;
+
+before(async () => {
+  fixture = await copyFixture('plain');
+  site = await serve(fixture.root);
+  browser = await launch();
+});
+after(async () => {
+  await browser?.close();
+  await site?.close();
+  await fixture?.remove();
+});
+
+const read = id => page.locator(`#read-${id}`).textContent();
+
+function blockLocalStorage() {
+  return page.addInitScript(() => {
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get() { throw new DOMException('blocked', 'SecurityError'); },
+    });
+  });
+}
+
+function fillLocalStorage() {
+  return page.addInitScript(() => {
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get() {
+        return {
+          getItem: () => null,
+          setItem() { throw new DOMException('full', 'QuotaExceededError'); },
+          removeItem() { throw new DOMException('full', 'QuotaExceededError'); },
+          get length() { return 0; },
+          key: () => null,
+        };
+      },
+    });
+  });
+}
+
+async function openBlocked(block) {
+  await page?.context().close();
+  page = await newPage(browser);
+  await block();
+  errors = collectErrors(page);
+  await page.goto(site.url);
+  await page.locator('[data-knobs]').waitFor({ state: 'attached' });
+}
+
+test('a blocked localStorage still mounts, and a set still changes the live value', async () => {
+  await openBlocked(blockLocalStorage);
+  await openDrawer(page);
+  await type(page, 'hero.title Kept in memory');
+  assert.equal(await read('hero-title'), 'Kept in memory');
+  assert.deepEqual(errors, []);
+  await page.reload();
+  await page.locator('[data-knobs]').waitFor({ state: 'attached' });
+  assert.equal(await read('hero-title'), 'The original headline');
+  assert.deepEqual(errors, []);
+});
+
+test('a full localStorage still mounts, and a set still changes the live value', async () => {
+  await openBlocked(fillLocalStorage);
+  await openDrawer(page);
+  await type(page, 'hero.title Not stored');
+  assert.equal(await read('hero-title'), 'Not stored');
+  await page.locator('.term-tab', { hasText: /^scene$/ }).click();
+  assert.equal(await page.locator('.term-tab.active').textContent(), 'scene');
+  assert.deepEqual(errors, []);
+  await page.reload();
+  await page.locator('[data-knobs]').waitFor({ state: 'attached' });
+  assert.equal(await read('hero-title'), 'The original headline');
+});
+
+test('a failure while mounting removes the host it appended', async () => {
+  await page?.context().close();
+  page = await newPage(browser);
+  errors = collectErrors(page);
+  await page.goto(`${site.url}?broken=1`);
+  await page.waitForFunction(() => window.__boots);
+  assert.equal(await page.locator('[data-knobs]').count(), 0);
+  assert.ok(errors.some(error => error.includes('mount failed')));
+});

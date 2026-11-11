@@ -56,6 +56,21 @@ function browserError() {
   return new Error('knobs: values can only change in a browser');
 }
 
+// Reading the storage global, and getItem, setItem and removeItem, each
+// throw when storage is blocked, full, or in a private window. Callers
+// keep going; only the persisted copy is lost.
+export function storageCall(area, method, ...args) {
+  let storage = area;
+  if (typeof area === 'string') {
+    try { storage = globalThis[area]; }
+    catch { return null; }
+  }
+  if (!method) return storage ?? null;
+  if (!storage) return null;
+  try { return storage[method](...args); }
+  catch { return null; }
+}
+
 export function defineControls(groups, fileValues = {}) {
   const byPath = new Map();
   const built = [];
@@ -139,7 +154,7 @@ export function defineControls(groups, fileValues = {}) {
     for (const [path] of byPath) {
       if (saved.has(path)) out[path] = saved.get(path);
     }
-    storage.setItem(storageKey, JSON.stringify(out));
+    storageCall(storage, 'setItem', storageKey, JSON.stringify(out));
   }
 
   function remember(path, value) {
@@ -215,7 +230,7 @@ export function defineControls(groups, fileValues = {}) {
     storageKey = key;
     let data = {};
     try {
-      const raw = storage.getItem(key);
+      const raw = storageCall(storage, 'getItem', key);
       if (raw != null && raw !== '') {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) data = parsed;

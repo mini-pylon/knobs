@@ -14,7 +14,8 @@ export function stepDecimals(step) {
 export function normalize(control, value) {
   if (control.type === 'number') {
     if (typeof value !== 'number' || !Number.isFinite(value)) return { ok: false };
-    const clamp = n => Math.min(control.max, Math.max(control.min, n));
+    // Adding 0 turns -0 into 0, so a value compares equal to itself after another pass.
+    const clamp = n => Math.min(control.max, Math.max(control.min, n)) + 0;
     const decimals = stepDecimals(control.step);
     // toFixed stops at 100 decimals; a finer step already holds every value a double can.
     if (decimals > 100) return { ok: true, value: clamp(value) };

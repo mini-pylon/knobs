@@ -11,6 +11,17 @@ export function stepDecimals(step) {
   return Math.max(0, fraction - Number(exponent));
 }
 
+// Show a number with the step's decimals. toFixed past 100 throws, and a
+// step coarser than a clamped bound would show a different number, so
+// those stay as the stored value.
+export function formatNumber(step, value) {
+  const decimals = stepDecimals(step);
+  if (decimals > 100) return String(value);
+  const shown = value.toFixed(decimals);
+  if (Number(shown) !== value) return String(value);
+  return shown;
+}
+
 // Round to a count of decimals. toFixed stops at 100, so past that round by significant digits.
 function roundDecimals(n, decimals) {
   if (decimals <= 100) return Number(n.toFixed(decimals));

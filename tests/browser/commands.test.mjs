@@ -278,6 +278,24 @@ test('clear empties the log and close hides the drawer', async () => {
   assert.equal(await isOpen(), false);
 });
 
+test('a stored number keeps decimals the step would round away', async () => {
+  await fresh();
+  await openDrawer(page);
+  await type(page, 'ls edge');
+  await type(page, 'get edge.bound');
+  const listed = await logText(page);
+  assert.match(listed, /bound +0\.25 +\[0\.25\.\.0\.75\]/);
+  assert.match(listed, /edge\.bound = 0\.25 {2}\(default 0\.25\)/);
+  await type(page, 'on edge');
+  assert.equal(await page.locator('[data-path="edge.bound"] .term-value').textContent(), '0.25');
+  await tab('fixture').click();
+  await type(page, 'edge.bound 0.75');
+  assert.match(await logText(page), /edge\.bound = 0\.75/);
+  await type(page, 'on edge');
+  assert.equal(await page.locator('[data-path="edge.bound"] .term-value').textContent(), '0.75');
+  assert.deepEqual(await page.locator('.term-changes-line').allTextContents(), ['bound  0.25 → 0.75']);
+});
+
 test('no timer survives unmounting', async () => {
   await fresh();
   await openDrawer(page);

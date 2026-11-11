@@ -15,5 +15,8 @@ export const knobs = defineControls([
   { name: 'product', hidden: true, controls: [
     { key: 'price', type: 'number', value: 10, min: 0, max: 100, step: 1 },
   ] },
+  { name: 'edge', hidden: true, about: 'A bound finer than its step', controls: [
+    { key: 'bound', type: 'number', value: 0.25, min: 0.25, max: 0.75, step: 1 },
+  ] },
 ], values);
 export const { control, onControl } = knobs;

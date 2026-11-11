@@ -1,6 +1,6 @@
 // The control drawer: a shadow host, one tab per group, a console, and
 // the instrument side (changed values, pictures, performance).
-import { stepDecimals, storageCall } from './store.js';
+import { formatNumber, storageCall } from './store.js';
 import { coerce, parseLine } from './console.js';
 import { performancePage } from './performance.js';
 import { css } from './style.js';
@@ -14,14 +14,12 @@ const el = (tag, cls, text) => {
 
 const TEXT_INPUT = new Set(['', 'text', 'search', 'url', 'tel', 'email', 'password', 'number']);
 
-// Strings stay as typed. Numbers take their decimals from the step, and
-// toFixed throws past 100 so a finer step is shown as the stored number.
+// Strings stay as typed. Numbers take their decimals from the step,
+// unless that would show a different number than the one stored.
 function fmt(control, value) {
   if (control.type === 'toggle') return value ? 'on' : 'off';
   if (typeof value !== 'number') return String(value);
-  const decimals = stepDecimals(control.step);
-  if (decimals > 100) return String(value);
-  return value.toFixed(decimals);
+  return formatNumber(control.step, value);
 }
 
 // event.target is the host once a key leaves the shadow tree.

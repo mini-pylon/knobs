@@ -1,6 +1,7 @@
-// The control drawer. Task 4 is the shell and the rows. The prompt, keys
-// beyond backtick, storage and the instrument side come in later tasks.
+// The control drawer: a shadow host, one tab per group, and a console.
+// Pictures, project pages and the performance tab are added later.
 import { stepDecimals } from './store.js';
+import { coerce, parseLine } from './console.js';
 import { css } from './style.js';
 
 const el = (tag, cls, text) => {
@@ -9,6 +10,8 @@ const el = (tag, cls, text) => {
   if (text != null) node.textContent = text;
   return node;
 };
+
+const TEXT_INPUT = new Set(['', 'text', 'search', 'url', 'tel', 'email', 'password', 'number']);
 
 // Strings stay as typed. Numbers take their decimals from the step, and
 // toFixed throws past 100 so a finer step is shown as the stored number.
@@ -20,9 +23,26 @@ function fmt(control, value) {
   return value.toFixed(decimals);
 }
 
+// event.target is the host once a key leaves the shadow tree.
+function isEditable(event) {
+  let node = event.composedPath()[0];
+  if (node && node.nodeType === 3) node = node.parentElement;
+  if (!node || node.nodeType !== 1) return false;
+  if (node.isContentEditable) return true;
+  if (node.tagName === 'TEXTAREA') return true;
+  if (node.tagName === 'INPUT') return TEXT_INPUT.has(String(node.type || '').toLowerCase());
+  return false;
+}
+
 export function mountKnobs(store, options = {}) {
   if (typeof window === 'undefined') throw new Error('knobs: mountKnobs needs a browser');
-  const { name } = options;
+  const {
+    name,
+    commands = {},
+    status = () => '',
+    onFocus = () => {},
+    extras = { get: () => ({}), set: () => {} },
+  } = options;
   if (!name) throw new Error('knobs: mountKnobs needs a name');
 
   const host = document.createElement('div');
@@ -54,19 +74,38 @@ export function mountKnobs(store, options = {}) {
   const tabs = root.querySelector('.term-tabs');
   const varsBox = root.querySelector('.term-vars');
   const log = root.querySelector('.term-log');
+  const input = root.querySelector('.term-prompt input');
+  const statusEl = root.querySelector('.term-status');
+  const fileInput = root.querySelector('.term-file');
+  const slash = root.querySelector('.term-slash');
   const body = root.querySelector('.term-body');
   const panes = { console: root.querySelector('.term-console'), params: root.querySelector('.term-params') };
   root.querySelector('.term-prompt span').textContent = `${name} $`;
 
+  store.attach(localStorage, `${name}:values`);
+
   const visibleGroups = () => store.groups.filter(group => !group.hidden);
   let active = new Set(visibleGroups()[0] ? [visibleGroups()[0].name] : []);
+  try {
+    const saved = JSON.parse(localStorage.getItem(`${name}:groups`));
+    const found = Array.isArray(saved) && saved.find(groupName => store.groups.some(group => group.name === groupName && !group.hidden));
+    if (found) active = new Set([found]);
+  } catch { /* a bad saved group is the same as none */ }
   let view = 'console';
   const rows = new Map();
+  const history = [];
+  let historyIndex = 0;
+  let focusTimer = 0;
+  let revokeTimer = 0;
 
   function print(text, cls = '') {
     for (const line of String(text).split('\n')) log.append(el('div', `term-line ${cls}`, line || ' '));
     while (log.childElementCount > 400) log.firstChild.remove();
     log.scrollTop = log.scrollHeight;
+  }
+
+  function notify() {
+    onFocus({ open: root.classList.contains('open'), groups: view === 'params' ? [...active] : [] });
   }
 
   function showPane() {
@@ -79,7 +118,13 @@ export function mountKnobs(store, options = {}) {
     consoleTab.type = 'button';
     consoleTab.setAttribute('aria-pressed', String(view === 'console'));
     consoleTab.title = 'console: type help, or / for actions';
-    consoleTab.onclick = () => { view = 'console'; showPane(); renderTabs(); };
+    consoleTab.onclick = () => {
+      view = 'console';
+      showPane();
+      renderTabs();
+      notify();
+      if (root.classList.contains('open')) input.focus({ preventScroll: true });
+    };
     const groupTabs = visibleGroups().map(group => {
       const on = view === 'params' && active.has(group.name);
       const button = el('button', `term-tab${on ? ' active' : ''}`, group.name);
@@ -88,14 +133,20 @@ export function mountKnobs(store, options = {}) {
       button.title = group.about;
       button.onclick = () => {
         view = 'params';
-        active = new Set([group.name]);
         showPane();
-        renderTabs();
-        renderVars();
+        setActive(new Set([group.name]));
       };
       return button;
     });
     tabs.replaceChildren(consoleTab, ...groupTabs);
+  }
+
+  function setActive(next) {
+    active = next;
+    try { localStorage.setItem(`${name}:groups`, JSON.stringify([...active])); } catch { /* storage can be full or blocked */ }
+    renderTabs();
+    renderVars();
+    notify();
   }
 
   function renderVars() {
@@ -204,19 +255,314 @@ export function mountKnobs(store, options = {}) {
     row.slider.setAttribute('aria-valuenow', String(value));
     row.value.textContent = fmt(row.control, value);
   }
-  store.subscribe((value, path) => update(path));
+  const unsubscribe = store.subscribe((value, path) => update(path));
+
+  function resolve(controlName) {
+    if (!controlName) return null;
+    if (store.byPath.has(controlName)) return store.byPath.get(controlName);
+    for (const group of store.groups) {
+      if (active.has(group.name) && store.byPath.has(`${group.name}.${controlName}`)) return store.byPath.get(`${group.name}.${controlName}`);
+    }
+    const matches = [...store.byPath.values()].filter(control => control.key === controlName);
+    return matches.length === 1 ? matches[0] : null;
+  }
+
+  function listing(groupName) {
+    const group = store.groups.find(group => group.name === groupName);
+    if (!group) return `no group ${groupName}`;
+    const width = Math.max(...group.controls.map(control => control.key.length));
+    return [`# ${group.name}: ${group.about}`, ...group.controls.map(control => {
+      const value = store.control(control.path);
+      const shown = fmt(control, value);
+      let range = '';
+      if (control.type === 'number') range = `[${control.min}..${control.max}]`;
+      else if (control.type === 'select') range = `[${control.options.join(' ')}]`;
+      const note = Object.is(value, control.default) ? '' : ` (default ${fmt(control, control.default)})`;
+      return `${control.key.padEnd(width)}  ${shown.padStart(6)}  ${range}${note}`;
+    })].join('\n');
+  }
+
+  function applySet(parsed) {
+    const { control, op, raw } = parsed;
+    const result = coerce(control, op, raw, store.control(control.path));
+    if (!result.ok) return print(result.message, 'err');
+    if (!store.set(control.path, result.value)) return print(`${control.path}: invalid value: ${result.value}`, 'err');
+    const applied = store.control(control.path);
+    const clamped = control.type === 'number' && (result.value < control.min || result.value > control.max);
+    print(`${control.path} = ${fmt(control, applied)}${clamped ? `  (clamped to ${control.min}..${control.max})` : ''}`);
+  }
+
+  function writeValues(entries) {
+    let count = 0;
+    for (const [path, value] of entries) {
+      if (!store.byPath.has(path)) continue;
+      if (store.set(path, value)) count++;
+    }
+    return count;
+  }
+
+  function downloadFile(fileName) {
+    const data = { app: name, version: 1, saved: new Date().toISOString(), values: store.changed(), ...extras.get() };
+    const stamp = data.saved.slice(0, 16).replace(/[-:]/g, '').replace('T', '-');
+    const safe = fileName ? String(fileName).replace(/[^\w.-]+/g, '-') : name;
+    const file = `${safe}-${stamp}.json`;
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+    const link = el('a');
+    link.href = url;
+    link.download = file;
+    shadow.append(link);
+    link.click();
+    link.remove();
+    clearTimeout(revokeTimer);
+    revokeTimer = setTimeout(() => URL.revokeObjectURL(url), 1000);
+    print(`saved ${file}`);
+  }
+
+  function applyConfig(data) {
+    const values = data?.values ?? data;
+    if (!values || typeof values !== 'object' || Array.isArray(values)) throw new Error('not a knobs config');
+    const count = writeValues(Object.entries(values));
+    extras.set(data);
+    print(`loaded ${count} values${data.agent ? ` · agent ${data.agent}` : ''}${data.portal ? ` · portal ${data.portal}` : ''}`);
+  }
+
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files?.[0];
+    fileInput.value = '';
+    if (!file) return;
+    try { applyConfig(JSON.parse(await file.text())); }
+    catch (error) { print(`load: ${error.message}`, 'err'); }
+  });
+
+  async function saveValues() {
+    const values = store.changed();
+    let response;
+    try {
+      response = await fetch('/__knobs/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values }),
+      });
+    } catch (error) {
+      print(String(error.message || error), 'err');
+      return;
+    }
+    if (response.status === 404) {
+      print('save needs the knobs Vite plugin; use export', 'err');
+      return;
+    }
+    if (!response.ok) {
+      let message = 'save failed';
+      try {
+        const body = await response.json();
+        if (body && body.error) message = String(body.error);
+      } catch { /* the failure was not JSON */ }
+      print(message, 'err');
+      return;
+    }
+    print(`saved ${Object.keys(values).length} values to knobs.values.json`);
+  }
+
+  const builtins = {
+    help: () => print([
+      'commands',
+      '  ls [group]             list controls',
+      '  <control> <value>      set a control',
+      '  <toggle> [on|off]      flip or set a toggle',
+      '  set <control> <value>  same as above; += and -= also work',
+      '  get <control>          show a value and what it does',
+      '  reset [control|group]  restore defaults',
+      '  save                   write changed values to knobs.values.json',
+      '  download [name]        download changed values as a JSON file',
+      '  load                   load a saved configuration file',
+      '  export                 print and copy values as JSON',
+      '  import <json>          load values from JSON',
+      '  on <group>             open a group\'s tab (or click it)',
+      '  clear                  clear this log',
+      '  close                  hide the drawer (or Esc)',
+      ...Object.entries(commands).map(([command, spec]) => `  ${(command + ' ' + (spec.usage || '')).padEnd(22)} ${spec.about}`),
+      'keys: ` toggles the drawer · Esc closes it · drag bars · arrows nudge (shift ×10) · double-click a name to reset',
+    ].join('\n')),
+    ls: ([groupName]) => {
+      if (groupName) return print(listing(groupName));
+      const names = [...active];
+      print(names.length ? names.map(listing).join('\n') : 'no groups on');
+    },
+    get: ([controlName]) => {
+      const control = resolve(controlName);
+      if (!control) return print(`unknown control: ${controlName ?? ''}`, 'err');
+      const value = store.control(control.path);
+      const about = control.about ? `\n  ${control.about}` : '';
+      print(`${control.path} = ${fmt(control, value)}  (default ${fmt(control, control.default)})${about}`);
+    },
+    reset: ([target]) => {
+      if (!target || target === 'all') {
+        store.reset();
+        return print('reset every control to its default');
+      }
+      const group = store.groups.find(group => group.name === target);
+      if (group) {
+        store.reset(group.controls.map(control => control.path));
+        return print(`reset ${target}`);
+      }
+      const control = resolve(target);
+      if (!control) return print(`unknown control: ${target}`, 'err');
+      store.reset([control.path]);
+      print(`reset ${control.path}`);
+    },
+    save: () => saveValues(),
+    download: ([fileName]) => downloadFile(fileName),
+    load: () => fileInput.click(),
+    export: () => {
+      const json = JSON.stringify(store.changed(), null, 2);
+      print(json);
+      navigator.clipboard?.writeText(json).then(() => print('copied to clipboard', 'dim'), () => {});
+    },
+    import: (args, rest) => {
+      try {
+        const data = JSON.parse(rest);
+        if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('not a knobs config');
+        print(`imported ${writeValues(Object.entries(data))} values`);
+      } catch (error) { print(`import: ${error.message}`, 'err'); }
+    },
+    on: ([groupName]) => {
+      const group = store.groups.find(group => group.name === groupName);
+      if (!group) return print(`no group ${groupName ?? ''}`, 'err');
+      view = 'params';
+      showPane();
+      setActive(new Set([group.name]));
+    },
+    clear: () => log.replaceChildren(),
+    close: () => toggle(false),
+  };
+
+  const slashActions = [
+    { name: 'save', usage: '', about: 'write changed values to knobs.values.json' },
+    { name: 'download', usage: '[name]', about: 'download changed values as a JSON file' },
+    { name: 'load', usage: '', about: 'load a saved configuration file' },
+    { name: 'reset', usage: '[control|group]', about: 'restore defaults' },
+    ...Object.entries(commands).map(([command, spec]) => ({ name: command, usage: spec.usage || '', about: spec.about || '' })),
+  ];
+  let slashHits = [];
+  let slashIndex = 0;
+  function renderSlash() {
+    const value = input.value;
+    const open = value.startsWith('/') && !/\s/.test(value);
+    slashHits = open ? slashActions.filter(action => action.name.startsWith(value.slice(1))) : [];
+    slash.hidden = slashHits.length === 0;
+    if (slash.hidden) return;
+    slashIndex = Math.min(slashIndex, slashHits.length - 1);
+    slash.style.bottom = `${root.querySelector('.term-prompt').offsetHeight + 4}px`;
+    slash.replaceChildren(...slashHits.map((action, i) => {
+      const item = el('div', `term-slash-item${i === slashIndex ? ' active' : ''}`);
+      item.setAttribute('role', 'option');
+      item.setAttribute('aria-selected', String(i === slashIndex));
+      item.append(el('span', 'term-slash-name', `/${action.name}`), el('span', 'term-slash-usage', action.usage), el('span', 'term-slash-about', action.about));
+      item.addEventListener('mousedown', event => { event.preventDefault(); input.value = ''; renderSlash(); run(`/${action.name}`); });
+      return item;
+    }));
+  }
+  input.addEventListener('input', () => { slashIndex = 0; renderSlash(); });
+  input.addEventListener('blur', () => { slash.hidden = true; });
+  input.addEventListener('focus', renderSlash);
+
+  const builtinNames = new Set(Object.keys(builtins));
+  const commandNames = new Set(Object.keys(commands));
+
+  function run(line) {
+    const text = String(line).trim();
+    if (!text) return;
+    print(`$ ${text}`, 'cmd');
+    history.push(text);
+    historyIndex = history.length;
+    const parsed = parseLine(line, { resolve, builtins: builtinNames, commands: commandNames });
+    try {
+      if (parsed.kind === 'empty') return;
+      if (parsed.kind === 'error') return print(parsed.message, 'err');
+      if (parsed.kind === 'builtin') return builtins[parsed.name](parsed.args, parsed.rest);
+      if (parsed.kind === 'command') return print(commands[parsed.name].run(parsed.args) ?? '');
+      if (parsed.kind === 'set') return applySet(parsed);
+      print(`unknown command: ${parsed.head}  (try help)`, 'err');
+    } catch (error) { print(String(error.message || error), 'err'); }
+  }
+
+  function complete() {
+    const [head, ...rest] = input.value.split(/\s+/);
+    const pool = rest.length
+      ? [...store.byPath.keys(), ...[...store.byPath.values()].map(control => control.key), ...store.groups.map(group => group.name)]
+      : ['set', ...builtinNames, ...commandNames, ...store.groups.flatMap(group => group.controls.map(control => active.has(group.name) ? control.key : control.path))];
+    const word = rest.length ? rest[rest.length - 1] : head;
+    const hits = [...new Set(pool)].filter(candidate => candidate.startsWith(word));
+    if (hits.length === 1) {
+      const words = input.value.split(/\s+/);
+      words[words.length - 1] = hits[0];
+      input.value = words.join(' ') + ' ';
+    } else if (hits.length > 1) print(hits.join('  '), 'dim');
+  }
+
+  input.addEventListener('keydown', event => {
+    if (!slash.hidden) {
+      const pick = slashHits[slashIndex];
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        slashIndex = (slashIndex + (event.key === 'ArrowDown' ? 1 : -1) + slashHits.length) % slashHits.length;
+        return renderSlash();
+      }
+      if (event.key === 'Tab') { event.preventDefault(); input.value = `/${pick.name} `; return renderSlash(); }
+      if (event.key === 'Enter') { event.preventDefault(); input.value = ''; renderSlash(); return run(`/${pick.name}`); }
+      if (event.key === 'Escape') { event.stopPropagation(); input.value = ''; return renderSlash(); }
+    }
+    if (event.key === 'Enter') { run(input.value); input.value = ''; renderSlash(); }
+    else if (event.key === 'Tab') { event.preventDefault(); complete(); }
+    else if (event.key === 'ArrowUp') { event.preventDefault(); historyIndex = Math.max(0, historyIndex - 1); input.value = history[historyIndex] ?? ''; }
+    else if (event.key === 'ArrowDown') { event.preventDefault(); historyIndex = Math.min(history.length, historyIndex + 1); input.value = history[historyIndex] ?? ''; }
+    else if (event.key === 'l' && event.ctrlKey) { event.preventDefault(); log.replaceChildren(); }
+  });
+
+  body.addEventListener('click', event => {
+    if (view !== 'console' || event.target.closest('button, a, input, select, textarea, [role="option"]')) return;
+    const selected = shadow.getSelection?.() ?? getSelection?.();
+    if (String(selected ?? '').length) return;
+    input.focus({ preventScroll: true });
+  });
 
   function toggle(open = !root.classList.contains('open')) {
     root.classList.toggle('open', open);
+    notify();
+    try { sessionStorage.setItem(`${name}:drawer`, open ? '1' : '0'); } catch { /* session storage can be blocked */ }
+    clearTimeout(focusTimer);
+    if (open && view === 'console') focusTimer = setTimeout(() => input.focus({ preventScroll: true }), 160);
+    else if (shadow.activeElement) shadow.activeElement.blur();
   }
   root.querySelector('.term-close').addEventListener('click', () => toggle(false));
-  window.addEventListener('keydown', event => {
-    if (event.key === '`') { event.preventDefault(); toggle(); }
-  });
+
+  function onKey(event) {
+    if (event.key === '`' && !event.ctrlKey && !event.metaKey) {
+      if (isEditable(event)) return;
+      event.preventDefault();
+      toggle();
+    } else if (event.key === 'Escape' && root.classList.contains('open')) toggle(false);
+  }
+  window.addEventListener('keydown', onKey);
+
+  const statusTimer = setInterval(() => {
+    if (!root.classList.contains('open')) return;
+    statusEl.textContent = status();
+  }, 250);
 
   showPane();
   renderTabs();
   renderVars();
-  // Task 5 replaces this with real teardown.
-  return () => {};
+  print(`${name} controls · type help, or / for actions · \` opens this drawer, Esc closes it`, 'dim');
+  try { if (sessionStorage.getItem(`${name}:drawer`) === '1') toggle(true); } catch { /* leave the drawer closed */ }
+
+  return function unmount() {
+    clearInterval(statusTimer);
+    clearTimeout(focusTimer);
+    clearTimeout(revokeTimer);
+    window.removeEventListener('keydown', onKey);
+    unsubscribe();
+    store.detach();
+    host.remove();
+  };
 }

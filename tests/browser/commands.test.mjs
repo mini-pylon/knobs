@@ -429,9 +429,14 @@ test('a click in the console focuses the prompt, except on a control or a text s
   await page.locator('#page-input').click();
   await page.locator('.term-log').click();
   assert.equal(await focused(), true);
-  await tab('hero').click();
   await page.locator('#page-input').click();
-  await page.locator('.term-viz').click();
+  await page.evaluate(() => {
+    const button = document.createElement('button');
+    button.className = 'test-control';
+    button.textContent = 'a control';
+    document.querySelector('[data-knobs]').shadowRoot.querySelector('.term-log').append(button);
+  });
+  await page.locator('.term-log .test-control').click();
   assert.equal(await focused(), false);
   await tab('fixture').click();
   await prompt.evaluate(node => node.blur());

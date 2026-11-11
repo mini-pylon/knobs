@@ -8,15 +8,18 @@ const TYPES = new Set(['number', 'toggle', 'select', 'text', 'color']);
 export function stepDecimals(step) {
   const [digits, exponent = '0'] = String(Math.abs(step)).toLowerCase().split('e');
   const fraction = (digits.split('.')[1] || '').length;
-  return Math.min(100, Math.max(0, fraction - Number(exponent)));
+  return Math.max(0, fraction - Number(exponent));
 }
 
 export function normalize(control, value) {
   if (control.type === 'number') {
     if (typeof value !== 'number' || !Number.isFinite(value)) return { ok: false };
     const clamp = n => Math.min(control.max, Math.max(control.min, n));
+    const decimals = stepDecimals(control.step);
+    // toFixed stops at 100 decimals; a finer step already holds every value a double can.
+    if (decimals > 100) return { ok: true, value: clamp(value) };
     // Rounding can step past a bound that has more decimals than the step, so clamp again.
-    return { ok: true, value: clamp(Number(clamp(value).toFixed(stepDecimals(control.step)))) };
+    return { ok: true, value: clamp(Number(clamp(value).toFixed(decimals))) };
   }
   if (control.type === 'toggle') {
     if (value === true || value === 1) return { ok: true, value: 1 };

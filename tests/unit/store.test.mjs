@@ -89,6 +89,7 @@ for (const [name, control, input, expected] of [
   ['a step sets decimals, not a grid', { type: 'number', min: 0.25, max: 5, step: 0.5 }, 1.23, { ok: true, value: 1.2 }],
   ['a step written with an exponent keeps its decimals', { type: 'number', min: 0, max: 1, step: 1e-7 }, 0.1234567, { ok: true, value: 0.1234567 }],
   ['a step with digits and an exponent keeps its decimals', { type: 'number', min: 0, max: 1, step: 2.5e-7 }, 0.123456789, { ok: true, value: 0.12345679 }],
+  ['a step finer than toFixed can round keeps the value', { type: 'number', min: 0, max: 1, step: 1e-101 }, 3e-101, { ok: true, value: 3e-101 }],
   ['rounding up never passes max', { type: 'number', min: 0.25, max: 0.75, step: 1 }, 0.75, { ok: true, value: 0.75 }],
   ['rounding down never passes min', { type: 'number', min: 0.25, max: 0.75, step: 1 }, 0.3, { ok: true, value: 0.25 }],
   ['NaN', number, NaN, { ok: false }],

@@ -4,12 +4,19 @@ const TYPES = new Set(['number', 'toggle', 'select', 'text', 'color']);
 // saved holds browser values that differ from base, and is all that is persisted.
 // live is what control() returns: saved, then base.
 
+// How many decimals a step carries, whether it is written 0.05 or 5e-7.
+export function stepDecimals(step) {
+  const [digits, exponent = '0'] = String(Math.abs(step)).toLowerCase().split('e');
+  const fraction = (digits.split('.')[1] || '').length;
+  return Math.min(100, Math.max(0, fraction - Number(exponent)));
+}
+
 export function normalize(control, value) {
   if (control.type === 'number') {
     if (typeof value !== 'number' || !Number.isFinite(value)) return { ok: false };
-    const clamped = Math.min(control.max, Math.max(control.min, value));
-    const decimals = (String(control.step).split('.')[1] || '').length;
-    return { ok: true, value: Number(clamped.toFixed(decimals)) };
+    const clamp = n => Math.min(control.max, Math.max(control.min, n));
+    // Rounding can step past a bound that has more decimals than the step, so clamp again.
+    return { ok: true, value: clamp(Number(clamp(value).toFixed(stepDecimals(control.step)))) };
   }
   if (control.type === 'toggle') {
     if (value === true || value === 1) return { ok: true, value: 1 };
@@ -58,6 +65,8 @@ export function defineControls(groups, fileValues = {}) {
         if (![min, max, step].every(part => typeof part === 'number' && Number.isFinite(part))) {
           throw new Error(`knobs: ${path} needs min, max and step`);
         }
+        if (min > max) throw new Error(`knobs: ${path} needs min at most max`);
+        if (step <= 0) throw new Error(`knobs: ${path} needs a positive step`);
       }
       if (raw.type === 'select' && (!Array.isArray(raw.options) || raw.options.length === 0)) {
         throw new Error(`knobs: ${path} needs options`);

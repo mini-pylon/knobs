@@ -3,7 +3,7 @@ title: control-drawer
 kind: plan
 target: knobs
 topic: control-drawer
-status: draft
+status: approved
 written: 2026-11-11T05:41:49Z
 by: claude
 worktree: /home/jmo/linda/repos/knobs/.worktrees/spec-control-drawer

@@ -104,3 +104,38 @@ test('a failure late in mounting releases everything mounting set up', async () 
   assert.deepEqual(await calls(), before);
 });
 
+async function openFixture(query, init) {
+  await page?.context().close();
+  page = await newPage(browser);
+  if (init) await page.addInitScript(init);
+  errors = collectErrors(page);
+  await page.goto(`${site.url}?${query}`);
+  await page.waitForFunction(() => window.__boots);
+}
+
+test('a page saves a value on unmount while the store is still attached', async () => {
+  await openFixture('pageSave=1');
+  await page.locator('[data-knobs]').waitFor({ state: 'attached' });
+  await page.evaluate(() => window.__unmount());
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('fixture:values') ?? '{}'));
+  assert.equal(stored['hero.title'], 'Saved on destroy');
+});
+
+test('a page whose hide throws does not stop the others being released', async () => {
+  await openFixture('hideFail=1');
+  await page.locator('[data-knobs]').waitFor({ state: 'attached' });
+  const thrown = await page.evaluate(() => { try { window.__unmount(); return null; } catch (error) { return error.message; } });
+  assert.equal(thrown, 'hide failed');
+  assert.deepEqual((await page.evaluate(() => window.__destroyed)).sort(), ['one', 'two']);
+  assert.equal(await page.locator('[data-knobs]').count(), 0);
+});
+
+test('a listener that throws while the store attaches leaves the store detached', async () => {
+  await openFixture('attachFail=1', () => localStorage.setItem('fixture:values', JSON.stringify({ 'hero.title': 'Stored' })));
+  assert.equal(await page.locator('[data-knobs]').count(), 0);
+  assert.ok(errors.some(error => error.includes('listener failed')));
+  await page.evaluate(() => window.__knobs.set('hero.overlay', 0.9));
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('fixture:values')));
+  assert.deepEqual(stored, { 'hero.title': 'Stored' });
+});
+

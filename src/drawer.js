@@ -94,24 +94,25 @@ export function mountKnobs(store, options = {}) {
     const body = root.querySelector('.term-body');
     const vizBox = root.querySelector('.term-viz');
     const panes = { console: root.querySelector('.term-console'), params: root.querySelector('.term-params') };
+    // Released after the pages, so a page can still save a value as it goes,
+    // and registered before attach, which can throw from a listener.
+    release.push(() => store.detach());
     const mounted = [];
-    release.push(() => {
-      for (const page of mounted) {
-        page.hide?.();
-        page.destroy?.();
-      }
-    });
     for (const page of [performancePage({ stats }), ...pages]) {
       const node = document.createElement('div');
       node.className = `term-page term-page-${page.name}`;
       body.append(node);
       panes[page.name] = node;
-      mounted.push({ ...page, node, panel: page.mount(node) });
+      const entry = { ...page, node, panel: page.mount(node) };
+      mounted.push(entry);
+      release.push(() => {
+        try { entry.hide?.(); }
+        finally { entry.destroy?.(); }
+      });
     }
     root.querySelector('.term-prompt span').textContent = `${name} $`;
 
     store.attach(storageCall('localStorage'), `${name}:values`);
-    release.push(() => store.detach());
 
     const visibleGroups = () => store.groups.filter(group => !group.hidden);
     let active = new Set(visibleGroups()[0] ? [visibleGroups()[0].name] : []);

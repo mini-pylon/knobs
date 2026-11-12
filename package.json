@@ -1,0 +1,47 @@
+{
+  "name": "knobs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "src",
+    "types"
+  ],
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./react": {
+      "types": "./types/react.d.ts",
+      "default": "./src/react.js"
+    },
+    "./vite": {
+      "types": "./types/vite.d.ts",
+      "default": "./src/vite.js"
+    }
+  },
+  "scripts": {
+    "test:unit": "node --test \"tests/unit/*.test.mjs\"",
+    "test:browser": "node --test --test-concurrency=1 \"tests/browser/*.test.mjs\""
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "vite": ">=7"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "vite": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "playwright": "1.64.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "typescript": "5.9.3",
+    "vite": "8.3.8"
+  }
+}

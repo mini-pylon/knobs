@@ -115,6 +115,13 @@ knobsRoot(knobsHost).render(knobsH(KnobsProbe));
   const prompt = page.locator('.term-prompt input');
   const style = await page.evaluate(() => getComputedStyle(document.querySelector('[data-knobs]').shadowRoot.querySelector('.term-tab:not(.active)')).color);
   assert.equal(style, 'rgb(232, 197, 71)', 'the project CSS does not reach the drawer');
+  // The tab colour is the drawer's own rule, so also check what the page would pass down.
+  const fonts = await page.evaluate(() => ({
+    page: getComputedStyle(document.body).fontFamily,
+    host: getComputedStyle(document.querySelector('[data-knobs]')).fontFamily,
+  }));
+  assert.match(fonts.page, /Areal/, 'the project sets its own font');
+  assert.notEqual(fonts.host, fonts.page, 'the drawer does not inherit the project font');
   await prompt.fill('hero.title Set in a real project');
   await prompt.press('Enter');
   await page.waitForFunction(() => document.getElementById('knobs-probe').textContent === 'Set in a real project');
@@ -165,7 +172,12 @@ process.exit(0);
   assert.deepEqual(failures, []);
   say('ok');
 } finally {
-  await browser?.close();
-  server?.kill();
+  // Each step on its own, so a failed close still stops the server and removes the
+  // copy. The first failure is thrown after them: an open browser would otherwise
+  // keep the process alive.
+  let cleanup;
+  try { await browser?.close(); } catch (error) { cleanup ??= error; }
+  try { server?.kill(); } catch (error) { cleanup ??= error; }
   rmSync(work, { recursive: true, force: true });
+  if (cleanup) throw cleanup;
 }

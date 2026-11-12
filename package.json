@@ -27,7 +27,7 @@
   },
   "peerDependencies": {
     "react": ">=18",
-    "vite": ">=6.1"
+    "vite": ">=7"
   },
   "peerDependenciesMeta": {
     "react": {

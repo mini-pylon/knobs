@@ -23,6 +23,11 @@ test('it has no runtime dependencies, and react and vite are optional peers', ()
   assert.deepEqual(pkg.peerDependenciesMeta, { react: { optional: true }, vite: { optional: true } });
 });
 
+// Vite 6 runs plugin configureServer hooks before its host check; 7 runs them after.
+test('it needs Vite 7 or later', () => {
+  assert.equal(pkg.peerDependencies.vite, '>=7');
+});
+
 test('it has no build step', () => {
   assert.equal(pkg.scripts.build, undefined);
   assert.equal(pkg.scripts.prepare, undefined);

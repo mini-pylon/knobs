@@ -20,25 +20,25 @@ after(async () => {
 
 // Each test gets its own copy and server, so one test's file edits cannot
 // reach the next test's page as a late reload.
-async function fresh() {
+async function fresh({ base = '/' } = {}) {
   await page?.context().close();
   await site?.close();
   await fixture?.remove();
   fixture = await copyFixture('plain');
   writeFileSync(file('hostile.css'), '');
-  site = await serve(fixture.root, { plugins: [knobs({ controls: 'controls.js' })] });
+  site = await serve(fixture.root, { base, plugins: [knobs({ controls: 'controls.js' })] });
   page = await newPage(browser);
   errors = collectErrors(page);
-  await page.goto(site.url);
+  await page.goto(new URL(base, site.url).href);
   await page.locator('[data-knobs]').waitFor({ state: 'attached' });
 }
 const waitForBoot = n => page.waitForFunction(count => window.__boots === count, n);
 const read = id => page.locator(`#read-${id}`).textContent();
 const values = () => JSON.parse(readFileSync(file('knobs.values.json'), 'utf8'));
 
-function post(body) {
+function post(body, headers = {}) {
   return new Promise((done, fail) => {
-    const req = request({ host: '127.0.0.1', port: site.port, method: 'POST', path: '/__knobs/save', headers: { origin: site.url.slice(0, -1), 'content-type': 'application/json' } }, res => {
+    const req = request({ host: '127.0.0.1', port: site.port, method: 'POST', path: '/__knobs/save', headers: { origin: site.url.slice(0, -1), 'content-type': 'application/json', ...headers } }, res => {
       res.resume();
       res.on('end', () => done(res.statusCode));
     });
@@ -97,4 +97,20 @@ test('the browser\'s copy of the schema is not trusted', async () => {
   await fresh();
   assert.equal(await post({ values: { 'made.up': 1 } }), 422);
   assert.deepEqual(values(), {});
+});
+
+test('a project with a non-root base can still save', async () => {
+  await fresh({ base: '/demo/' });
+  assert.equal(await post({ values: { 'hero.title': 'Saved under a base' } }), 200);
+  assert.deepEqual(values(), { 'hero.title': 'Saved under a base' });
+});
+
+// A DNS rebinding page sends its own name as both Host and Origin, so the
+// origin check passes and only Vite's host check can refuse it.
+test('a host Vite does not allow is refused before the save route', async () => {
+  await fresh();
+  const before = readFileSync(file('knobs.values.json'), 'utf8');
+  const status = await post({ values: { 'hero.title': 'From a rebinding page' } }, { host: 'rebind.example', origin: 'http://rebind.example' });
+  assert.equal(status, 403);
+  assert.equal(readFileSync(file('knobs.values.json'), 'utf8'), before);
 });

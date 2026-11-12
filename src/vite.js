@@ -81,19 +81,17 @@ export default function knobs({ controls, origins = [] } = {}) {
     configResolved(resolved) {
       resolvedConfig = resolved;
     },
-    // Mounted from the returned function, which Vite runs after its own
-    // middleware. Vite 6 runs this hook itself before its host check, and the
-    // host check is what stops a DNS rebinding page from reaching the route.
+    // Mounted in the hook itself. From Vite 7 the host check, which stops a
+    // DNS rebinding page, is already in place when this hook runs, and the
+    // route comes before Vite's base middleware, so a non-root base can save.
     configureServer(server) {
       const projectRoot = root;
       const controlsPath = controlsFile;
-      return () => {
-        server.middlewares.use(SAVE_ROUTE, createSaveHandler({
-          root: projectRoot,
-          origins,
-          loadStore: () => loadStore(projectRoot, controlsPath),
-        }));
-      };
+      server.middlewares.use(SAVE_ROUTE, createSaveHandler({
+        root: projectRoot,
+        origins,
+        loadStore: () => loadStore(projectRoot, controlsPath),
+      }));
     },
     // hotUpdate runs once per environment and would reload the page twice.
     handleHotUpdate({ file, server }) {

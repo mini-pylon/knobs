@@ -3,7 +3,7 @@ title: control-drawer
 kind: plan
 target: knobs
 topic: control-drawer
-status: approved
+status: draft
 written: 2026-11-11T05:41:49Z
 by: claude
 worktree: /home/jmo/linda/repos/knobs/.worktrees/spec-control-drawer
@@ -49,7 +49,7 @@ Where the spec was wrong or silent, this plan decided:
 13. **A custom picture replaces the changed list** on its tab. The performance tab samples only while it shows, and its chart plots frame rate alone.
 14. **The collapsed handle is left out.** wings-vdb hides it with `display: none`, so the drawer opens only by keyboard, as it does there. A phone has no way to open it.
 15. **`mountKnobs` returns only the unmount function,** as the spec says, so `print`, `run` and `toggle` are not exposed.
-16. **Tests pin Vite 8.3.8,** the major version this machine's React projects use. The peer range is `>=6.1`, and `runnerImport` exists in 6.4.5, but only Vite 8 is run.
+16. **Tests pin Vite 8.3.8,** the major version this machine's React projects use. The peer range is `>=7`, and only Vite 8 is run. Vite 6 runs plugin `configureServer` hooks before its host check, so a route mounted in the hook answers a DNS rebinding page there, and mounting from the function the hook returns instead puts the route after Vite's proxy and base middleware, which breaks saves under a non-root `base`. From Vite 7.0.0 the host check runs before plugin hooks.
 17. **The real project is `drop` at `ff45f97`:** Vite 8, React 19, TypeScript and Tailwind's global reset, which is the CSS collision the spec worries about.
 18. **The knobs skill is outside this build.** It belongs to another repository, so it cannot be a milestone of a run in this one. See After the build.
 
@@ -62,7 +62,7 @@ Where the spec was wrong or silent, this plan decided:
 3. Teardown. Look for a timer, frame loop, media query listener or store subscription that survives `unmount`, since React's strict mode mounts twice.
 4. A controls file that imports more than `knobs`. The stub covers `knobs/react` only, so a controls file importing another linked package would still fail to load in Node.
 5. Real browsers. Tests run only on Chromium. `all: initial !important` on the host, the `translate` property and a native color input inside a shadow root need a look in Safari.
-6. Vite 6 and 7. Only Vite 8 is run, and the plugin reaches into `exports['.']` to find the project's copy.
+6. Vite 7. Only Vite 8 is run, and the plugin reaches into `exports['.']` to find the project's copy.
 
 ## Milestones
 
@@ -168,7 +168,7 @@ node --test tests/unit/package.test.mjs
 no such file or directory
 ```
 
-**Implementation.** Write `package.json` with `name` `knobs`, `version` `0.1.0`, `private` true, `type` `module`, and `files` of `src` and `types`. `exports` maps `.`, `./react` and `./vite` each to `types` under `./types/` and `default` under `./src/` (`index`, `react`, `vite`). `scripts` holds `test:unit` as `node --test "tests/unit/*.test.mjs"` and `test:browser` as `node --test --test-concurrency=1 "tests/browser/*.test.mjs"`, and no build or prepare script. `peerDependencies` are `react` `>=18` and `vite` `>=6.1`, both optional through `peerDependenciesMeta`. There are no `dependencies`. Install the dev tools exactly, with `npm install --prefer-offline --ignore-scripts --save-dev --save-exact vite@8.3.8 react@19.3.1 react-dom@19.3.1 playwright@1.64.1 typescript@5.9.3`, the Playwright release that ships the pinned chromium-1248. Write `.gitignore` with `node_modules/`, `tests/.tmp/` and `.worktrees/`.
+**Implementation.** Write `package.json` with `name` `knobs`, `version` `0.1.0`, `private` true, `type` `module`, and `files` of `src` and `types`. `exports` maps `.`, `./react` and `./vite` each to `types` under `./types/` and `default` under `./src/` (`index`, `react`, `vite`). `scripts` holds `test:unit` as `node --test "tests/unit/*.test.mjs"` and `test:browser` as `node --test --test-concurrency=1 "tests/browser/*.test.mjs"`, and no build or prepare script. `peerDependencies` are `react` `>=18` and `vite` `>=7` (decision 16), both optional through `peerDependenciesMeta`. There are no `dependencies`. Install the dev tools exactly, with `npm install --prefer-offline --ignore-scripts --save-dev --save-exact vite@8.3.8 react@19.3.1 react-dom@19.3.1 playwright@1.64.1 typescript@5.9.3`, the Playwright release that ships the pinned chromium-1248. Write `.gitignore` with `node_modules/`, `tests/.tmp/` and `.worktrees/`.
 
 **Check:** `node --test tests/unit/package.test.mjs` passes 5.
 
@@ -1917,7 +1917,7 @@ src/vite.js' imported from
 
 **Implementation.** Throw `knobs: the Vite plugin needs the controls file path` with no `controls`. There is no static import of `vite` (decision 2). In `config`, take the root from the user's config or the working directory, resolved to an absolute path, make the controls path absolute against it, resolve `vite/package.json` with `createRequire` from the project root, read its `exports['.']` (a string, or an object's `import`, which may itself hold `default`), and import that file. Return `server.fs.allow` as the project copy's `searchForWorkspaceRoot(root)` plus the real path of this package's directory, and `resolve.dedupe` of `react` and `react-dom`. Return nothing for `ssr` or `optimizeDeps`.
 
-`configureServer` mounts `createSaveHandler` on `SAVE_ROUTE`. Its `loadStore` calls the project copy's `runnerImport` on the controls file, fresh each time, with that `root`, `configFile: false` and `logLevel: 'silent'`, the resolved config's aliases, and an alias placed first from `/^knobs\/react$/` to `src/react-stub.js` (decision 1). It throws if the module exports no `knobs` store.
+`configureServer` mounts `createSaveHandler` on `SAVE_ROUTE` in the hook itself, not from a function it returns: Vite's host check is already in place by then (decision 16), and the route must come before Vite's base middleware so a project with a non-root `base` can still save. Its `loadStore` calls the project copy's `runnerImport` on the controls file, fresh each time, with that `root`, `configFile: false` and `logLevel: 'silent'`, the resolved config's aliases, and an alias placed first from `/^knobs\/react$/` to `src/react-stub.js` (decision 1). It throws if the module exports no `knobs` store.
 
 `handleHotUpdate` sends `{ type: 'full-reload' }` and returns an empty list for the controls file, the values file, or a file under this package's directory, compared with a trailing separator so a sibling directory sharing the prefix does not match. Anything else returns undefined. Keep `handleHotUpdate` even though Vite marks it for future replacement by `hotUpdate`: that hook fires once per environment and would reload twice. `src/react-stub.js`'s `bindReact` returns a function that throws `knobs: useControl cannot run while the Vite plugin loads the schema`, and imports nothing.
 

@@ -48,25 +48,20 @@ export interface Group {
   controls: readonly Control[];
 }
 
-export interface BuiltControl {
-  key: string;
-  type: Control['type'];
-  value: Value;
-  path: string;
-  group: string;
-  default: Value;
-  about?: string;
-  min?: number;
-  max?: number;
-  step?: number;
-  options?: readonly string[];
-}
+// What the store builds from a control: the same fields, its path, group and
+// normalized default, frozen. It stays a union on `type`, as the store always
+// sets a number's range and a select's options.
+type Built<C extends Control> = C extends Control
+  ? Readonly<C & { path: string; group: string; default: C['value'] }>
+  : never;
+
+export type BuiltControl = Built<Control>;
 
 export interface BuiltGroup {
-  name: string;
-  about: string;
-  hidden: boolean;
-  controls: readonly BuiltControl[];
+  readonly name: string;
+  readonly about: string;
+  readonly hidden: boolean;
+  readonly controls: readonly BuiltControl[];
 }
 
 export interface Listener {
@@ -111,9 +106,10 @@ export interface Extras {
   set(data: Record<string, unknown>): void;
 }
 
+// The drawer calls a panel's update while its page shows. Teardown is the
+// page's own destroy; a panel has none.
 export interface PagePanel {
   update?(): void;
-  destroy?(): void;
 }
 
 export interface Page {

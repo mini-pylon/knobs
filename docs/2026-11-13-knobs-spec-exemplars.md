@@ -3,7 +3,7 @@ title: "knobs exemplars: example pictures and drawer extensions for the skill"
 kind: spec
 target: knobs
 topic: exemplars
-status: approved
+status: draft
 written: 2026-11-13T04:32:25Z
 by: claude
 approved_at: 2026-11-13T04:52:22Z
@@ -54,7 +54,7 @@ Each exemplar folder holds exactly one of `visual.js` and `extension.js`.
 
 - **`controls.js`** exports `groups`, an array of plain `Group` objects (`{ name, about, controls }`). A picture exemplar has exactly one group, and its picture is keyed by that group's name. An extension exemplar may have more than one. A picture exemplar also exports `probe`, the path of one number control whose value visibly changes a still frame of the picture (the test sets it; see Testing).
 - **`visual.js`** has a default export `(store) => (host) => Visual`, normally `canvasVisual(label, () => (pen, w, h, now) => …)`. It reads values only through `store.control('<group>.<key>')`. The label is a real description of the picture, as `aria-label`. `now` is in seconds: the drawer calls `frame(now / 1000)` from `requestAnimationFrame`, at most every 66 ms (`src/drawer.js`).
-- **`extension.js`** has a default export `(store) => ({ commands?, pages?, status? })`, spread into the `mountKnobs` options. A page gets no drawer styles (the drawer stylesheet in `src/style.js` covers only its own classes and the performance page), so an extension's page appends its own `<style>` to its host or styles inline.
+- **`extension.js`** has a default export `(store) => ({ commands?, pages?, status? })`, merged into the `mountKnobs` options: its `commands` into one command map, its `pages` onto one page list, and its `status` into one function, each shared with the project and any other extension. `mountKnobs` takes one of each, so a plain spread of two extensions keeps only the last one's commands and pages. A page gets no drawer styles (the drawer stylesheet in `src/style.js` covers only its own classes and the performance page), so an extension's page appends its own `<style>` to its host or styles inline.
 - Both files are plain JavaScript that starts with `// @ts-check` and types its parameters with JSDoc imports from `knobs`, so they type-check against the public types. In a JavaScript project the agent copies them as they are. In a TypeScript project it writes `knobs/<group>.ts`, turning the JSDoc types into annotations, because a relative `.js` import from `.tsx` fails type-checking without `allowJs`, which Vite's TypeScript templates do not set.
 - Taking the store as a parameter keeps an exemplar independent of any project's controls file. When adapting one, the agent replaces `store.control` with the project's own `control` import.
 - **The picture area.** A picture shows only when the viewport is at least 761 px wide (`src/drawer.js` checks `matchMedia('(min-width: 761px)')`; `src/style.js` hides `.term-viz` and `.term-status` at 760 px and below). The drawer is `min(30vh, 210px)` tall, so at 1280×800 the canvas is about 600 by 155 px: a short, wide strip. Side-by-side pictures (`before-after`, `cross-section`) are designed for that strip.
@@ -92,7 +92,7 @@ SKILL.md stays at most 1,000 words. The detailed procedures live in two new file
   1. Read the chosen exemplar's README, then its code.
   2. Copy it into the project next to the mount component: `knobs/<group>.js` in a JavaScript project, `knobs/<group>.ts` with the JSDoc types turned into annotations in a TypeScript project. Replace `store.control` with the project's `control` import.
   3. Replace stand-in maths with the project's own. Where the page computes the value with a function, import that function, so the picture cannot drift from the page.
-  4. Add the picture to `visuals`, or spread the extension into the mount options (merging `status` with any the project has).
+  4. Add the picture to `visuals`, or merge the extension into the mount options: its `commands` into one map with the project's and any other extension's, its `pages` onto one list, and its `status` into one function with any the project has. A plain spread keeps only the last extension's commands and pages.
   5. **Check.**
      - Run the dev server and open it with the agent's own browser tool, at least 761 px wide: pictures and the status line are hidden below that.
      - Press backtick, open the group, and screenshot the drawer at 1280 px wide and at 761 px wide (the narrowest width that shows pictures, to catch clipping).
@@ -130,7 +130,7 @@ SKILL.md stays at most 1,000 words. The detailed procedures live in two new file
 
 - **Fixture.** `tests/fixtures/exemplar/`: a page that reads `?name=<exemplar>` and mounts that exemplar.
   - `tests/browser/lib/harness.mjs` adds a string alias, `{ find: '@exemplars', replacement: <repo>/skills/knobs/exemplars }`. The fixture's `main.js` uses `import.meta.glob('@exemplars/*/*.js')` (lazy). Vite may return the keys relative to the fixture or as resolved paths rather than with `@exemplars` kept, so the fixture first rebuilds the map: for each key it matches `/([^/]+)\/(controls|visual|extension)\.js$/` and stores the loader under `<name>/<file>`. It then looks up `<name>/controls.js` and whichever of `<name>/visual.js` and `<name>/extension.js` exists. Vite does not analyse a dynamic `import()` whose path is a variable through an alias, so a template-string import is not used. If the glob does not resolve through the alias in Vite 8, the fallback is a `define` constant holding the `/@fs/` path of `skills/knobs/exemplars`, which `server.fs.allow: [repo]` already permits.
-  - It builds a store with `defineControls(groups)` and mounts the drawer with `name: 'exemplar'`; `mountKnobs` attaches `localStorage` under `exemplar:values` (`src/drawer.js`), so a test seeds values with an init script before the page loads. Pictures go in as `visuals: { [group.name]: visual(store) }`; extensions are spread into the options. Exemplar files import `knobs` through the existing alias.
+  - It builds a store with `defineControls(groups)` and mounts the drawer with `name: 'exemplar'`; `mountKnobs` attaches `localStorage` under `exemplar:values` (`src/drawer.js`), so a test seeds values with an init script before the page loads. Pictures go in as `visuals: { [group.name]: visual(store) }`; an extension is spread into the options, which is safe there because the fixture mounts one exemplar and has no options of its own. Exemplar files import `knobs` through the existing alias.
   - One server and one browser serve the whole test file, at 1280×800.
 - **`tests/browser/exemplars.test.mjs`** lists every folder under `skills/knobs/exemplars/` and, for each, checks:
   - **Shape:** `README.md` has the three sections in order; `controls.js` exists; exactly one of `visual.js` and `extension.js` exists; `shot.png` exists; a picture's `controls.js` exports `probe`, naming a number control of its group.

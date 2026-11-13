@@ -3,7 +3,7 @@ title: knobs exemplars implementation plan
 kind: plan
 target: knobs
 topic: exemplars
-status: approved
+status: draft
 written: 2026-11-13T05:11:14Z
 by: claude
 approved_at: 2026-11-13T05:54:24Z
@@ -56,6 +56,7 @@ Where the spec was silent, this plan decided:
 The plan's author found nothing in the spec wrong. Its recipe and its alias-and-glob fixture worked as written, apart from the mount wait in decision 5.
 
 - Checked 2026-11-13 at 837f5fa: 10 apply blocks, 11 reds as quoted, 6 probes pass.
+- Amended 2026-11-13 during Milestone 4: the spec and Task 9 step 4 said to spread an extension into the mount options. `mountKnobs` (`src/drawer.js`) takes one `commands` object and one `pages` array, so two extensions spread together keep only the last one's. Step 4 now says to merge them. The fix to `pictures.md` is made inline after the Milestone 4 build, with a unit test that step 4 names merging `commands` and `pages`. The fixture's spread (Task 1) is unchanged: it mounts one exemplar and has no options of its own.
 
 ## Review Focus
 
@@ -1203,7 +1204,7 @@ SKILL.md has an ## Exemplars section
   1. Read the exemplar's README, then its code.
   2. Copy it next to the mount component: `knobs/<group>.js`, or `knobs/<group>.ts` with the JSDoc turned into annotations, because `allowJs` is not set in Vite's TypeScript templates. Replace `store.control` with the project's `control` import.
   3. Replace the stand-in maths, importing the page's own function where there is one.
-  4. Add the picture to `visuals`, or spread the extension into the mount options, merging `status`.
+  4. Add the picture to `visuals`, or merge the extension into the mount options: `commands` into one map, `pages` onto one list, `status` into one function, each shared with the project and any other extension, because a plain spread keeps only the last extension's commands and pages. A three-line example shows the merge.
   5. The Check:
      - the dev server opened with the agent's own browser tool, at least 761 px wide;
      - backtick, the group, and screenshots at 1280 and at 761 px wide;

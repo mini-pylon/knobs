@@ -370,7 +370,9 @@ export function mountKnobs(store, options = {}) {
       if (row.field) {
         const shown = String(value);
         if (row.field.value !== shown) row.field.value = shown;
-        row.value.textContent = fmt(row.control, value);
+        // A text input or a select already shows its value, which can be long:
+        // only a color, whose input is a swatch, has its hex beside it.
+        row.value.textContent = row.control.type === 'color' ? fmt(row.control, value) : '';
         return;
       }
       const span = (value - row.control.min) / (row.control.max - row.control.min) * 100;

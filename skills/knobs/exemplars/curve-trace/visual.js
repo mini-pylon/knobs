@@ -23,6 +23,7 @@ function easeProgress(kind, t, overshoot) {
  */
 export default function visual(store) {
   return canvasVisual('Progress over time, with a dot running along the curve', () => {
+    // The dot's last few positions as [time, progress], so they redraw at any width.
     /** @type {[number, number][]} */
     const trail = [];
     return (pen, w, h, now) => {
@@ -42,7 +43,9 @@ export default function visual(store) {
       const plotTop = 8;
       const plotBottom = h - 20;
       const yMax = 1.6;
-      const xOf = (/** @type {number} */ t) => t * w;
+      // Inset so the marker's ring is not cut off at either end of the loop.
+      const inset = 8;
+      const xOf = (/** @type {number} */ t) => inset + t * (w - 2 * inset);
       const yOf = (/** @type {number} */ value) => plotBottom - (value / yMax) * (plotBottom - plotTop);
 
       const y1 = yOf(1);
@@ -59,14 +62,17 @@ export default function visual(store) {
 
       const x = xOf(unit);
       const y = yOf(progress);
-      trail.push([x, y]);
+      // A new loop starts the trail again, so no dots stay behind at the far end.
+      const last = trail[trail.length - 1];
+      if (last && unit < last[0]) trail.length = 0;
+      trail.push([unit, progress]);
       while (trail.length > 8) trail.shift();
       for (let i = 0; i < trail.length - 1; i++) {
         const point = trail[i];
         const fade = (i + 1) / trail.length;
         pen.ctx.save();
         pen.ctx.globalAlpha = fade;
-        pen.dot(point[0], point[1], 2, pen.dim);
+        pen.dot(xOf(point[0]), yOf(point[1]), 2, pen.dim);
         pen.ctx.restore();
       }
       pen.ring(x, y, 6, pen.fg, 1.5);

@@ -208,9 +208,26 @@ test('presets: a name inherited from Object.prototype is an unknown preset', asy
       await type(page, `preset ${name}`);
       const line = await page.locator('.term-line.err').last().textContent();
       assert.match(line, new RegExp(`unknown preset: ${name}`));
-      for (const known of Object.keys(presets)) assert.ok(line.includes(known), `${name}: lists ${known}`);
+      const known = line.match(/\(known: (.*)\)$/);
+      assert.ok(known, `${name}: the error lists the known names`);
+      assert.deepEqual(known[1].split(', '), Object.keys(presets), `${name}: lists exactly the presets`);
       assert.deepEqual(await page.evaluate(() => window.__exemplar.store.changed()), before, `${name} changes nothing`);
     }
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.context().close();
+  }
+});
+
+test('presets: preset prints exactly one line per preset', async () => {
+  const { page, errors, presets } = await presetsDrawer();
+  try {
+    await type(page, 'preset');
+    const lines = await page.locator('.term-log .term-line').evaluateAll(nodes => {
+      const last = nodes.findLastIndex(node => node.classList.contains('cmd'));
+      return nodes.slice(last + 1).map(node => node.textContent);
+    });
+    assert.deepEqual(lines, Object.entries(presets).map(([name, preset]) => `${name}  ${preset.about}`));
     assert.deepEqual(errors, []);
   } finally {
     await page.context().close();
@@ -348,6 +365,24 @@ test('renders-tab: a value changed back, or reset, is no change', async () => {
     await change(page, 'color');
     assert.equal(await statusText(page), '2 changes since last render');
     await type(page, 'reset');
+    assert.equal(await statusText(page), '');
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.context().close();
+  }
+});
+
+test('renders-tab: after a render of changed values, reset and changing back count against that render', async () => {
+  const { page, errors } = await rendersDrawer();
+  try {
+    const path = await page.evaluate(() => window.__exemplar.store.groups.find(group => group.name === 'scene').controls.find(item => item.type === 'number').path);
+    const rendered = await change(page, 'number');
+    await type(page, 'render');
+    await page.clock.runFor(2000);
+    assert.equal(await statusText(page), '');
+    await type(page, 'reset');
+    assert.equal(await statusText(page), '1 change since last render');
+    await page.evaluate(([path, value]) => window.__exemplar.store.set(path, value), [path, rendered]);
     assert.equal(await statusText(page), '');
     assert.deepEqual(errors, []);
   } finally {

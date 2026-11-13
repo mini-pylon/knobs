@@ -303,3 +303,54 @@ test('renders-tab: the console takes input while a render runs', async () => {
     await page.context().close();
   }
 });
+
+test('renders-tab: a render typed while one runs prints already rendering and starts nothing', async () => {
+  const { page, errors } = await rendersDrawer();
+  try {
+    await type(page, 'render');
+    await type(page, 'render');
+    assert.match(await logText(page), /already rendering/);
+    await page.clock.runFor(2000);
+    assert.equal(await entries(page).count(), 1);
+    await page.clock.runFor(2000);
+    assert.equal(await entries(page).count(), 1, 'the second render never started');
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.context().close();
+  }
+});
+
+test('renders-tab: a change made while a render runs counts against the values it used', async () => {
+  const { page, errors } = await rendersDrawer();
+  try {
+    await type(page, 'render');
+    const during = await change(page, 'number');
+    await page.clock.runFor(2000);
+    assert.equal(await entries(page).count(), 1);
+    assert.ok(!(await entries(page).first().textContent()).includes(` ${during} `), `the entry shows the value before ${during}`);
+    assert.equal(await statusText(page), '1 change since last render');
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.context().close();
+  }
+});
+
+test('renders-tab: a value changed back, or reset, is no change', async () => {
+  const { page, errors } = await rendersDrawer();
+  try {
+    const path = await page.evaluate(() => window.__exemplar.store.groups.find(group => group.name === 'scene').controls.find(item => item.type === 'number').path);
+    const original = await page.evaluate(path => window.__exemplar.store.control(path), path);
+    await change(page, 'number');
+    assert.equal(await statusText(page), '1 change since last render');
+    await page.evaluate(([path, value]) => window.__exemplar.store.set(path, value), [path, original]);
+    assert.equal(await statusText(page), '');
+    await change(page, 'number');
+    await change(page, 'color');
+    assert.equal(await statusText(page), '2 changes since last render');
+    await type(page, 'reset');
+    assert.equal(await statusText(page), '');
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.context().close();
+  }
+});

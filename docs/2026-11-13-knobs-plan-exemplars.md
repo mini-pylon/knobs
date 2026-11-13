@@ -3,10 +3,10 @@ title: knobs exemplars implementation plan
 kind: plan
 target: knobs
 topic: exemplars
-status: draft
+status: approved
 written: 2026-11-13T05:11:14Z
 by: claude
-approved_at: 2026-11-13T05:54:24Z
+approved_at: 2026-11-13T15:48:41Z
 approved_by: josh
 ---
 

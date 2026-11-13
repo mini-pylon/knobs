@@ -35,6 +35,8 @@ Checked 2026-11-13. Base commit: `56f6edd Merge pull request #9 from mini-pylon/
 ```
 skills/knobs/
   SKILL.md
+  pictures.md                     the Pictures step in full
+  share.md                        the Share step in full
   templates/                      (unchanged)
   exemplars/
     <name>/
@@ -48,16 +50,16 @@ Each exemplar folder holds exactly one of `visual.js` and `extension.js`.
 
 ### Exemplar format
 
-- **`controls.js`** exports `groups`, an array of plain `Group` objects (`{ name, about, controls }`). A picture exemplar has exactly one group, and its picture is keyed by that group's name. An extension exemplar may have more than one.
-- **`visual.js`** has a default export `(store) => (host) => Visual`, normally `canvasVisual(label, () => (pen, w, h, now) => …)`. It reads values only through `store.control('<group>.<key>')`. The label is a real description of the picture, as `aria-label`.
-- **`extension.js`** has a default export `(store) => ({ commands?, pages?, status? })`, spread into the `mountKnobs` options.
-- Both files are plain JavaScript that starts with `// @ts-check` and types its parameters with JSDoc imports from `knobs`, so they drop into a JS or TS project and type-check against the public types.
+- **`controls.js`** exports `groups`, an array of plain `Group` objects (`{ name, about, controls }`). A picture exemplar has exactly one group, and its picture is keyed by that group's name. An extension exemplar may have more than one. A picture exemplar also exports `probe`, the path of one number control whose value visibly changes a still frame of the picture (the test sets it; see Testing).
+- **`visual.js`** has a default export `(store) => (host) => Visual`, normally `canvasVisual(label, () => (pen, w, h, now) => …)`. It reads values only through `store.control('<group>.<key>')`. The label is a real description of the picture, as `aria-label`. `now` is in seconds: the drawer calls `frame(now / 1000)` from `requestAnimationFrame`, at most every 66 ms (`src/drawer.js`).
+- **`extension.js`** has a default export `(store) => ({ commands?, pages?, status? })`, spread into the `mountKnobs` options. A page gets no drawer styles (the drawer stylesheet in `src/style.js` covers only its own classes and the performance page), so an extension's page appends its own `<style>` to its host or styles inline.
+- Both files are plain JavaScript that starts with `// @ts-check` and types its parameters with JSDoc imports from `knobs`, so they type-check against the public types. In a JavaScript project the agent copies them as they are. In a TypeScript project it writes `knobs/<group>.ts`, turning the JSDoc types into annotations, because a relative `.js` import from `.tsx` fails type-checking without `allowJs`, which Vite's TypeScript templates do not set.
 - Taking the store as a parameter keeps an exemplar independent of any project's controls file. When adapting one, the agent replaces `store.control` with the project's own `control` import.
+- **The picture area.** A picture shows only when the viewport is at least 761 px wide (`src/drawer.js` checks `matchMedia('(min-width: 761px)')`; `src/style.js` hides `.term-viz` and `.term-status` at 760 px and below). The drawer is `min(30vh, 210px)` tall, so at 1280×800 the canvas is about 600 by 155 px: a short, wide strip. Side-by-side pictures (`before-after`, `cross-section`) are designed for that strip.
 - **`README.md`**, at most 250 words, with exactly these sections:
   - `## When`: one sentence naming the kind of group or project it suits.
   - `## What makes it good`: three to five points, each checkable by looking at a screenshot of the drawer.
-  - `## Adapting`: what to rename, which stand-in to replace with the project's own code, and what to keep.
-  - An extension's README also links the knobs issue that would make it unnecessary ("if knobs grows this, prefer it").
+  - `## Adapting`: what to rename, which stand-in to replace with the project's own code, and what to keep. An extension's Adapting section also links the knobs issue that would make it unnecessary ("if knobs grows this, prefer it"), and says that `status` is a single mount option, so a project with its own status line merges the two into one function.
 - **`shot.png`**: the drawer open on the exemplar's group (or page, for `renders-tab`), cropped to the drawer, made by `npm run exemplars:shots`.
 
 ### The first eight
@@ -75,34 +77,36 @@ Each exemplar folder holds exactly one of `visual.js` and `extension.js`.
 
 Each exemplar uses a neutral subject a web prototype plausibly has. None mentions clouds, birds or any project of Josh's.
 
-### Skill changes (`skills/knobs/SKILL.md`)
+### Skill changes (`skills/knobs/`)
+
+SKILL.md stays at most 1,000 words. The detailed procedures live in two new files beside it, read only when the step is reached: `skills/knobs/pictures.md` (the Pictures step) and `skills/knobs/share.md` (the Share step).
 
 - **Description** adds: "or when a control group needs a picture or a drawer command".
 - **Step 3, Propose.**
   - For each group, name a picture: the closest exemplar from the index, or "none" where a picture adds nothing (copy text, a lone toggle).
   - Suggest an extension where the project fits one: `presets` when the user talks about distinct looks, `renders-tab` when a change is costly to see.
   - The user trims pictures and extensions with the controls.
-- **New step 8, Pictures**, after Reads. Hand over becomes step 9.
+- **New step 8, Pictures**, after Reads; Hand over becomes step 9. In SKILL.md, one short paragraph: for each picture or extension the user kept, follow `pictures.md`. `pictures.md` holds:
   1. Read the chosen exemplar's README, then its code.
-  2. Copy it into the project next to the mount component, as `knobs/<group>.js`. Replace `store.control` with the project's `control` import.
+  2. Copy it into the project next to the mount component: `knobs/<group>.js` in a JavaScript project, `knobs/<group>.ts` with the JSDoc types turned into annotations in a TypeScript project. Replace `store.control` with the project's `control` import.
   3. Replace stand-in maths with the project's own. Where the page computes the value with a function, import that function, so the picture cannot drift from the page.
-  4. Add the picture to `visuals`, or spread the extension into the mount options.
+  4. Add the picture to `visuals`, or spread the extension into the mount options (merging `status` with any the project has).
   5. **Check.**
-     - Run the dev server, open it with the agent's own browser tool, press backtick, open the group, and screenshot the drawer at full width and at 390 px wide.
+     - Run the dev server and open it with the agent's own browser tool, at least 761 px wide: pictures and the status line are hidden below that.
+     - Press backtick, open the group, and screenshot the drawer at 1280 px wide and at 761 px wide (the narrowest width that shows pictures, to catch clipping).
      - Compare each "What makes it good" point against the screenshots. Fix what fails and look again.
      - After three rounds, stop and show the user what is still off.
-     - With no browser tool, ask the user to open the drawer and send a screenshot.
+     - With no browser tool, ask the user to open the drawer in a window at least 761 px wide and send a screenshot.
   6. Show the final screenshot with the hand-over.
-- **Wrap up**, new step after the decisions note: **Share** (see Contributing).
+- **Wrap up**, new step after the decisions note: **Share**. In SKILL.md, one line: offer to share each checked picture the user liked, following `share.md`.
 - **Never** adds:
   - "Hand over a picture that has not been checked against its exemplar."
   - "Send anything about the user's project anywhere without their yes."
-- **Exemplars index**, a section at the end: one line per exemplar with its name, kind and its README's "When" sentence. The index names every folder under `exemplars/` and nothing else.
-- SKILL.md stays under about 1,000 words. The detail lives in the READMEs, read one at a time.
+- **Exemplars index**, a section at the end of SKILL.md: one line per exemplar with its name, kind and its README's "When" sentence. The index names every folder under `exemplars/` and nothing else.
 
 ### Contributing
 
-- **Issue form.** `.github/ISSUE_TEMPLATE/exemplar.yml` adds the label `exemplar`. Its fields, with these fixed ids:
+- **Issue form.** `.github/ISSUE_TEMPLATE/exemplar.yml` with `labels: [exemplar]`. A form's `labels` key applies only labels that already exist, so the `exemplar` label is created on mini-pylon/knobs as a manual step of the build (on Josh's yes). The form's fields, with these fixed ids:
   - `kind`: dropdown, picture or extension.
   - `when`: input.
   - `good`: textarea, "What makes it good".
@@ -110,25 +114,28 @@ Each exemplar uses a neutral subject a web prototype plausibly has. None mention
   - `code`: textarea, rendered as `js`.
   - `screenshot`: textarea, for the image the user drops in.
   - `license`: a required checkbox, "This is my code and I can share it under the MIT license".
-- **Share step.** For each picture that passed its check and that the user liked, the agent asks whether to share it.
+- **Share step** (`share.md`). For each picture that passed its check and that the user liked, the agent asks whether to share it.
   1. On a yes, it first offers to make the code generic: project names, copy text and identifying constants become neutral ones.
   2. It shows exactly what each field will hold.
-  3. It gives the user a link to `https://github.com/mini-pylon/knobs/issues/new?template=exemplar.yml` with the title `exemplar: <a short name for the picture>` (`title=`) and every field prefilled by its id as a URL-encoded query parameter.
-  4. The user opens the link, drops in the screenshot they have already seen, reads it through, and submits it themselves.
-  5. If the link would exceed about 8,000 characters, the agent leaves `code` empty and names the file to paste from.
+  3. It builds a link to `https://github.com/mini-pylon/knobs/issues/new?template=exemplar.yml` with `title=exemplar: <a short name for the picture>` and the text fields `when`, `good`, `controls` and `code` prefilled by id as URL-encoded query parameters. GitHub prefills only text fields (inputs and textareas) from the URL ("Creating an issue from a URL query" in GitHub's documentation; community discussion 5288 reports dropdowns and checkboxes are not filled), so `kind` and `license` are left to the user, and the license tick is their own consent.
+  4. It measures the encoded link. Above 6,000 bytes it leaves `code` (then `controls`) out of the link and names the file to paste from.
+  5. The user opens the link, picks the kind, ticks the license, drops in the screenshot they have already seen, reads it through, and submits it themselves.
 - The agent never files the issue itself: `gh` cannot attach an image, and the user's own submit is the consent.
 - **Curation.** The maintainer turns a good submission into a new `exemplars/` folder as an ordinary pull request. The tests cover it from then on.
 - **No telemetry.** Nothing is collected or sent passively.
 
 ## Testing
 
-- **Fixture.** `tests/fixtures/exemplar/`: a page that reads `?name=<exemplar>`, loads that folder's `controls.js` and `visual.js` or `extension.js`, builds a store with `defineControls(groups)`, and mounts the drawer. Pictures go in as `visuals: { [group.name]: visual(store) }`; extensions are spread into the options. `tests/browser/lib/harness.mjs` gains the alias that lets the fixture import from `skills/knobs/exemplars/`. One server and one browser serve the whole file.
+- **Fixture.** `tests/fixtures/exemplar/`: a page that reads `?name=<exemplar>` and mounts that exemplar.
+  - `tests/browser/lib/harness.mjs` adds a string alias, `{ find: '@exemplars', replacement: <repo>/skills/knobs/exemplars }`. The fixture's `main.js` uses `import.meta.glob('@exemplars/*/*.js')` (lazy) and looks up `@exemplars/<name>/controls.js` and whichever of `visual.js` and `extension.js` exists in that map. Vite does not analyse a dynamic `import()` whose path is a variable through an alias, so a template-string import is not used. If the glob does not resolve through the alias in Vite 8, the fallback is a `define` constant holding the `/@fs/` path of `skills/knobs/exemplars`, which `server.fs.allow: [repo]` already permits.
+  - It builds a store with `defineControls(groups)` and mounts the drawer: pictures as `visuals: { [group.name]: visual(store) }`, extensions spread into the options. Exemplar files import `knobs` through the existing alias.
+  - One server and one browser serve the whole test file, at 1280×800.
 - **`tests/browser/exemplars.test.mjs`** lists every folder under `skills/knobs/exemplars/` and, for each, checks:
-  - **Shape:** `README.md` has the three sections in order; `controls.js` exists; exactly one of `visual.js` and `extension.js` exists; `shot.png` exists.
+  - **Shape:** `README.md` has the three sections in order; `controls.js` exists; exactly one of `visual.js` and `extension.js` exists; `shot.png` exists; a picture's `controls.js` exports `probe`, naming a number control of its group.
   - **Mounts clean:** the page mounts with no page errors and no console errors.
-  - **Pictures:**
-    - with the drawer open on the group, the canvas is not blank after a few frames (some pixel differs from the drawer's background);
-    - after one of its number controls is set to its maximum through the console, the canvas differs from before.
+  - **Pictures,** with the clock controlled as in Screenshots below (install before `goto`, open the drawer and the group, wait about 300 ms real time for the 220 ms slide, `pauseAt` a fixed time, `runFor(200)`):
+    - the canvas is not blank: some pixel has alpha above zero (`canvasVisual` clears the canvas to transparent each frame, so the drawer background is behind it, not in it);
+    - read the pixels; set `probe` to its maximum through the console; `runFor(200)` again from the same paused time; read again; the two differ. Equal clock advances make the comparison depend on the set, not on animation.
   - **`presets`:**
     - `preset` prints every preset name;
     - `preset <name>` changes the `look` values it names and no `quality` value;
@@ -141,14 +148,18 @@ Each exemplar uses a neutral subject a web prototype plausibly has. None mention
 - **`tests/unit/skill.test.mjs`** adds:
   - the SKILL.md exemplar index names every folder and nothing else;
   - each README is at most 250 words;
-  - the skill's description mentions pictures.
+  - SKILL.md is at most 1,000 words, and names `pictures.md` and `share.md`, which exist;
+  - the skill's description mentions pictures;
+  - the existing "nothing in the skill depends on one machine or one person" test scans every file under `skills/knobs/` (exemplars, `pictures.md`, `share.md` included, PNGs excluded), and also rejects the words `wings-vdb`, `mini-pylon/tools`, `cloud` and `bird`.
 - **TypeScript.** A third compile test, built like `tests/unit/types.test.mjs` (`tsc -p` on a project under `tests/types/`), checks `skills/knobs/exemplars/**/*.js` with `allowJs` and `checkJs` against the package's public types, and expects no errors.
-- **Screenshots.** `npm run exemplars:shots` runs `tests/browser/exemplar-shots.mjs`, which writes each `shot.png`:
-  - 1280×800 viewport, cropped to the drawer;
-  - the clock frozen with Playwright's `page.clock`, so a rerun on one machine gives the same image.
-  - The test suite never writes shots; it only checks that they exist. Regenerating is a deliberate step, committed with the change that needs it.
-- **Install check.** Early in the build, confirm that `npx skills add mini-pylon/knobs` (from a branch or a local path) installs `exemplars/` with its PNGs, not only `SKILL.md`. If it does not, the index links each exemplar's GitHub URL instead, and this spec is amended.
-- **The two issue-form behaviours,** prefill by id and the `exemplar` label, are checked by hand once the template is on the default branch, with a link the agent builds. They cannot be tested before merge.
+- **Screenshots.** `npm run exemplars:shots` runs `tests/browser/exemplar-shots.mjs`, which writes each `shot.png`. Under `page.clock`, `requestAnimationFrame` and `performance.now` are fake and no frame runs until the clock advances, so the recipe is:
+  1. viewport 1280×800; `page.clock.install()` before `goto`;
+  2. open the drawer and the group (or page), then wait about 300 ms of real time for the 220 ms CSS slide, which the clock does not control;
+  3. `page.clock.pauseAt(<a fixed time>)`, then `page.clock.runFor(200)`, so the 66 ms frame throttle lets frames draw;
+  4. screenshot the `.term-drawer` locator.
+  - A rerun on one machine gives the same image. The test suite never writes shots; it only checks that they exist. Regenerating is a deliberate step, committed with the change that needs it.
+- **Install check.** vercel-labs/skills installs a skill by copying its whole directory recursively (`copyDirectory` in its `src/installer.ts`, skipping only `metadata.json`, `.git`, `__pycache__` and `__pypackages__`), so `exemplars/` and its PNGs arrive. The build confirms it once with `npx skills add` from a local path. Its default mode keeps a copy under `.agents/skills/knobs` inside the user's project, so a project's broad `include` in tsconfig or eslint may pick up the exemplar files; `pictures.md` says so in one line.
+- **The issue form,** text-field prefill and the `exemplar` label, is checked by hand once the template is on the default branch, with a link built as `share.md` describes. It cannot be tested before merge.
 
 ## Out of scope
 

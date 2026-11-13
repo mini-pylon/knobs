@@ -4,5 +4,6 @@
   "before-after": "picture",
   "angle-dial": "picture",
   "schedule-countdown": "picture",
-  "cross-section": "picture"
+  "cross-section": "picture",
+  "presets": "extension"
 }

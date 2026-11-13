@@ -118,3 +118,96 @@ for (const name of names) {
     assert.notDeepEqual(seeded, first, `setting ${probe} to its maximum changes the picture`);
   });
 }
+
+// presets: `preset` applies part of the look group and keeps the quality group.
+async function presetsDrawer() {
+  const { page, errors } = await openExemplar(browser, site.url, 'presets');
+  await openDrawer(page);
+  const presets = await page.evaluate(() => window.__exemplar.module.presets);
+  return { page, errors, presets };
+}
+
+// Sets each path to a valid value other than its current one, in the page,
+// and returns the values the store now holds.
+const nudge = (page, paths) => page.evaluate(list => {
+  const store = window.__exemplar.store;
+  for (const path of list) {
+    const control = store.byPath.get(path);
+    const value = store.control(path);
+    let next = `${value}!`;
+    if (control.type === 'number') next = value === control.max ? control.min : control.max;
+    if (control.type === 'color') next = value === '#123456' ? '#654321' : '#123456';
+    if (control.type === 'toggle') next = value ? 0 : 1;
+    if (control.type === 'select') next = control.options.find(option => option !== value) ?? value;
+    store.set(path, next);
+  }
+  return Object.fromEntries(list.map(path => [path, store.control(path)]));
+}, paths);
+
+const values = (page, paths) => page.evaluate(list => Object.fromEntries(list.map(path => [path, window.__exemplar.store.control(path)])), paths);
+
+test('presets: preset lists every preset with its about', async () => {
+  const { page, errors, presets } = await presetsDrawer();
+  try {
+    assert.ok(Object.keys(presets).length >= 2, 'at least two presets');
+    await type(page, 'preset');
+    const log = await logText(page);
+    for (const [name, preset] of Object.entries(presets)) {
+      assert.ok(log.includes(name), `lists ${name}`);
+      assert.ok(log.includes(preset.about), `lists the about of ${name}`);
+    }
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.context().close();
+  }
+});
+
+test('presets: preset <name> sets the look values it names and nothing else', async () => {
+  const { page, errors, presets } = await presetsDrawer();
+  try {
+    const { paths, defaults } = await page.evaluate(() => {
+      const controls = [...window.__exemplar.store.byPath.values()];
+      return { paths: controls.map(control => control.path), defaults: Object.fromEntries(controls.map(control => [control.path, control.default])) };
+    });
+    const look = paths.filter(path => path.startsWith('look.'));
+    const quality = paths.filter(path => path.startsWith('quality.'));
+    assert.ok(quality.length > 0, 'there is a quality group to keep');
+    for (const [name, preset] of Object.entries(presets)) {
+      for (const path of Object.keys(preset.values)) assert.ok(look.includes(path), `${name} names only look controls, not ${path}`);
+    }
+    const [name, preset] = Object.entries(presets).find(([, item]) => Object.keys(item.values).length < look.length) ?? [];
+    assert.ok(name, 'some preset sets only part of look');
+    assert.ok(Object.entries(preset.values).some(([path, value]) => !Object.is(value, defaults[path])), `${name} changes something`);
+
+    const kept = [...look.filter(path => !(path in preset.values)), ...quality];
+    const before = await nudge(page, kept);
+    await type(page, `preset ${name}`);
+    assert.deepEqual(await values(page, Object.keys(preset.values)), preset.values);
+    assert.deepEqual(await values(page, kept), before);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.context().close();
+  }
+});
+
+test('presets: an unknown preset prints an error', async () => {
+  const { page } = await presetsDrawer();
+  try {
+    await type(page, 'preset nope');
+    assert.match(await page.locator('.term-line.err').last().textContent(), /nope/);
+  } finally {
+    await page.context().close();
+  }
+});
+
+test('presets: reset still returns every default', async () => {
+  const { page, presets } = await presetsDrawer();
+  try {
+    await type(page, `preset ${Object.keys(presets)[0]}`);
+    assert.notDeepEqual(await page.evaluate(() => window.__exemplar.store.changed()), {});
+    await type(page, 'reset');
+    assert.deepEqual(await page.evaluate(() => window.__exemplar.store.changed()), {});
+  } finally {
+    await page.context().close();
+  }
+});

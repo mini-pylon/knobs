@@ -46,7 +46,8 @@ export default function presetsExtension(store) {
           if (!name) {
             return Object.entries(presets).map(([key, preset]) => `${key}  ${preset.about}`).join('\n');
           }
-          const preset = presets[name];
+          // Own keys only, so a name such as `toString` is not a preset.
+          const preset = Object.hasOwn(presets, name) ? presets[name] : undefined;
           if (!preset) {
             throw new Error(`unknown preset: ${name} (known: ${Object.keys(presets).join(', ')})`);
           }

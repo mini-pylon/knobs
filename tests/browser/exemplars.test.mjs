@@ -200,6 +200,23 @@ test('presets: an unknown preset prints an error', async () => {
   }
 });
 
+test('presets: a name inherited from Object.prototype is an unknown preset', async () => {
+  const { page, errors, presets } = await presetsDrawer();
+  try {
+    for (const name of ['constructor', 'toString', '__proto__']) {
+      const before = await page.evaluate(() => window.__exemplar.store.changed());
+      await type(page, `preset ${name}`);
+      const line = await page.locator('.term-line.err').last().textContent();
+      assert.match(line, new RegExp(`unknown preset: ${name}`));
+      for (const known of Object.keys(presets)) assert.ok(line.includes(known), `${name}: lists ${known}`);
+      assert.deepEqual(await page.evaluate(() => window.__exemplar.store.changed()), before, `${name} changes nothing`);
+    }
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.context().close();
+  }
+});
+
 test('presets: reset still returns every default', async () => {
   const { page, presets } = await presetsDrawer();
   try {

@@ -22,7 +22,7 @@ approved_by: josh
 ## Global Constraints
 
 - Base commit `837f5fa` on `spec-knobs-exemplars`, the same code as `56f6edd` on `main`. At the base, `npm run test:unit` gives 198 pass, 0 fail, and `npm run test:browser` gives 89 pass, 0 fail, in about 35 s.
-- Counts when each milestone ends: Milestone 1, 200 unit and 94 browser; Milestone 2, 200 and 119; Milestone 3, 200 and 130; Milestone 4, 207 and 130. A count that differs is recorded and explained in the closing report.
+- Counts when each milestone ends: Milestone 1, 200 unit and 94 browser; Milestone 2, 200 and 119; Milestone 3, 200 and 130; Milestone 4, 207 and 130, then 209 and 130 after Task 11. A count that differs is recorded and explained in the closing report.
 - Every test in this plan was run before the plan was written, in a throwaway copy of the base, against rough reference versions of `curve-trace`, `presets` and `renders-tab`, rough skill text and a reference form. All passed. They were then broken on purpose, and each break was caught: `Math.random` in a picture fails `deterministic`; a picture that reads its probe but ignores the value fails `reads the store`; a preset that also resets the `look` keys it does not name fails the preset test; a render that finishes synchronously fails the console test; a type error fails the compile test. The same shot written twice was byte-identical. With the harness alias added, the whole browser suite ran with 105 pass (89 old and 16 new). `import.meta.glob('@exemplars/*/*.js')` resolves through the string alias in Vite 8.3.8, so the spec's `/@fs/` fallback is not needed.
 - Build each task to its description and no further. A later exemplar's tests fail until its own task, and that is expected. A test that seems impossible to pass means the implementation has drifted from the description: stop and report it. Never weaken, skip or delete a check or a test, and never edit a test to make it pass.
 - Dependencies: a worktree starts with no `node_modules`. Run `npm ci --prefer-offline --ignore-scripts` first.
@@ -37,7 +37,7 @@ Where the spec was silent, this plan decided:
 
 1. **A list of shipped exemplars.** `tests/browser/exemplars.json` maps each shipped exemplar to its kind. The browser test covers every name in it plus every folder on disk, so a missing folder fails instead of going untested, and a folder curated later is still tested. Each exemplar's task adds its entry.
 2. **Test names start with the exemplar**, as `<name>: <check>`, so `--test-name-pattern '^<name>: '` runs one exemplar.
-3. **The shape check is stricter than the spec's list.** The folder holds exactly the four files. `shot.png` starts with the PNG signature. The README's `## ` sections are exactly When, What makes it good, Adapting, in that order. A `# <name>` title line above them is allowed. When is one sentence: it ends with a period and has no other period, so no "e.g.". It is also at most 15 words, because Task 9 copies it word for word into SKILL.md's index, where the 1,000-word cap leaves room for about that much; no test counts this, so the builder does. What makes it good has three to five bullets, each line starting `- **Look:** ` or `- **Behaviour:** `. An extension's Adapting section links a `https://github.com/mini-pylon/knobs/issues/<n>` URL and names `` `status` ``. The code file's first line is `// @ts-check`. A picture's `probe` names a number control of its one group whose default is below its maximum, because a probe that starts at its maximum changes nothing when the test sets it there. A picture reads values only through literal `store.control('<group>.<key>')` calls naming its own group's controls, its probe among them, so the reads are easy to find when adapting.
+3. **The shape check is stricter than the spec's list.** The folder holds exactly the four files. `shot.png` starts with the PNG signature. The README's `## ` sections are exactly When, What makes it good, Adapting, in that order. A `# <name>` title line above them is allowed. When is one sentence: it ends with a period and has no other period, so no "e.g.". It is also at most 15 words, because Task 9 copies it word for word into SKILL.md's index, where the 1,000-word cap leaves room for about that much; no test counts this, so the builder does. What makes it good has three to five bullets, each line starting `- **Look:** ` or `- **Behaviour:** `. An extension's Adapting section links a `https://github.com/mini-pylon/knobs/issues/<n>` URL and names `` `status` ``; Task 11 adds a unit test that it also names `` `commands` `` and `` `pages` ``. The code file's first line is `// @ts-check`. A picture's `probe` names a number control of its one group whose default is below its maximum, because a probe that starts at its maximum changes nothing when the test sets it there. A picture reads values only through literal `store.control('<group>.<key>')` calls naming its own group's controls, its probe among them, so the reads are easy to find when adapting.
 4. **A picture's label** (the canvas `aria-label`) has at least three words.
 5. **The recipe waits for the mount.** The fixture loads the exemplar with dynamic imports, which can finish after `load`. So between `goto` and the first `runFor(100)`, the shared helper waits for `[data-knobs]`, or for `body[data-error]` when the exemplar is missing. Fake time does not move during that wait, so frame times are unchanged.
 6. **What an extension's tests and shot open:** its first page if it has pages, otherwise its first group. Before the shot, the shots script types console lines from a small map: `render` for `renders-tab`, so its history is not empty. `presets` shows its `look` group at the defaults.
@@ -56,7 +56,7 @@ Where the spec was silent, this plan decided:
 The plan's author found nothing in the spec wrong. Its recipe and its alias-and-glob fixture worked as written, apart from the mount wait in decision 5.
 
 - Checked 2026-11-13 at 837f5fa: 10 apply blocks, 11 reds as quoted, 6 probes pass.
-- Amended 2026-11-13 during Milestone 4: the spec and Task 9 step 4 said to spread an extension into the mount options. `mountKnobs` (`src/drawer.js`) takes one `commands` object and one `pages` array, so two extensions spread together keep only the last one's. Step 4 now says to merge them. The fix to `pictures.md` is made inline after the Milestone 4 build, with a unit test that step 4 names merging `commands` and `pages`. The fixture's spread (Task 1) is unchanged: it mounts one exemplar and has no options of its own.
+- Amended 2026-11-13 during Milestone 4: the spec and Task 9 step 4 said to spread an extension into the mount options. `mountKnobs` (`src/drawer.js`) takes one `commands` object and one `pages` array, so two extensions spread together keep only the last one's. Step 4 now says to merge them, with an example and a rule on name clashes, and each extension's Adapting section names all three options. Task 11 makes that change in Milestone 4. It supersedes the `status`-only Adapting bullets of Tasks 7 and 8 and the fixture comment written in Task 1. The fixture's spread itself is unchanged: it mounts one exemplar and has no options of its own. Task 11's apply block was run in a copy of `c5ea946`: its red printed both expected lines, and a reference implementation of its three text changes gave 12 pass.
 
 ## Review Focus
 
@@ -72,7 +72,7 @@ The plan's author found nothing in the spec wrong. Its recipe and its alias-and-
 - **Milestone 1: the exemplar bench and `curve-trace`** (Task 1). Ends with the fixture, the shared clock recipe, the shots script, the compile test and the widened skill scan in place, and one picture exemplar passing end to end. Reviewer brief: run the fixture by hand on `curve-trace` (`npm run exemplars:serve`) and check Review Focus 1 to 3 for it; confirm the harness change is the one alias line, and that the shots script writes only the names it is given.
 - **Milestone 2: the other five pictures** (Tasks 2 to 6). Ends with six picture exemplars passing. Reviewer brief: check Review Focus 1 to 4 for each picture, and that no picture calls `Math.random`, `Date` or `performance.now`.
 - **Milestone 3: the two extensions** (Tasks 7 and 8). Ends with `presets` and `renders-tab` passing their behaviour tests. Reviewer brief: check that each README links its issue (#4, #10) and says how to merge `status`, that the stand-in render is plainly marked as the part to replace, and that the `renders` page styles itself and needs no drawer class.
-- **Milestone 4: the skill text, the issue form and the install check** (Tasks 9 and 10). Ends with the skill indexing all eight exemplars, `pictures.md` and `share.md` written, and the form in place. Reviewer brief: check Review Focus 5 and 6, read `pictures.md` and `share.md` against the spec's lists, and read the closing report for the install check's result.
+- **Milestone 4: the skill text, the issue form and the install check** (Tasks 9 and 10, and Task 11, added after its review). Ends with the skill indexing all eight exemplars, `pictures.md` and `share.md` written, and the form in place. Reviewer brief: check Review Focus 5 and 6, read `pictures.md` and `share.md` against the spec's lists, and read the closing report for the install check's result.
 
 ### Task 1: the exemplar bench and `curve-trace`
 
@@ -1204,7 +1204,7 @@ SKILL.md has an ## Exemplars section
   1. Read the exemplar's README, then its code.
   2. Copy it next to the mount component: `knobs/<group>.js`, or `knobs/<group>.ts` with the JSDoc turned into annotations, because `allowJs` is not set in Vite's TypeScript templates. Replace `store.control` with the project's `control` import.
   3. Replace the stand-in maths, importing the page's own function where there is one.
-  4. Add the picture to `visuals`, or merge the extension into the mount options: `commands` into one map, `pages` onto one list, `status` into one function, each shared with the project and any other extension, because a plain spread keeps only the last extension's commands and pages. A three-line example shows the merge.
+  4. Add the picture to `visuals`, or merge the extension into the mount options: `commands` into one map, `pages` onto one list, `status` into one function, each shared with the project and any other extension, because a plain spread keeps only the last extension's commands and pages. Task 11 adds the spec's example and its rule on name clashes.
   5. The Check:
      - the dev server opened with the agent's own browser tool, at least 761 px wide;
      - backtick, the group, and screenshots at 1280 and at 761 px wide;
@@ -1304,6 +1304,60 @@ ISSUE_TEMPLATE/exemplar.yml
 **Checks:** `node --test tests/unit/exemplar-form.test.mjs` (2 pass), `npm run test:unit` (207 pass, 0 fail), then the whole browser suite as a job (130 pass, 0 fail).
 
 **Commit:** `feat(skill): add the exemplar issue form`
+
+### Task 11: merge an extension, do not spread it
+
+Added after Milestone 4's review, which found that `pictures.md` step 4 said to spread an extension into the mount options (see the amendment line under Global Constraints). The driver builds it inline, as a fix to Milestone 4.
+
+**Files:** edit `tests/unit/skill.test.mjs`, `skills/knobs/pictures.md`, `skills/knobs/exemplars/presets/README.md`, `skills/knobs/exemplars/renders-tab/README.md` and the comment at the top of `tests/fixtures/exemplar/main.js`.
+
+```bash apply
+cat >> tests/unit/skill.test.mjs <<'PLAN_EOF'
+
+test('pictures.md step 4 merges an extension, with an example and the clash rule', () => {
+  const pictures = readFileSync(join(dir, 'pictures.md'), 'utf8');
+  const four = pictures.match(/^4\. [\s\S]*?(?=^5\. )/m)?.[0] ?? '';
+  assert.ok(four, 'pictures.md has a step 4 followed by a step 5');
+  assert.doesNotMatch(pictures, /spread the extension/i, 'pictures.md no longer says to spread an extension');
+  assert.match(four, /merge/i, 'step 4 says to merge');
+  for (const word of ['`commands`', '`pages`', '`status`']) assert.ok(four.includes(word), `step 4 names ${word}`);
+  assert.match(four, /commands: /, 'the example merges commands');
+  assert.match(four, /pages: \[/, 'the example joins pages');
+  assert.match(four, /\.filter\(Boolean\)/, 'the example drops empty statuses');
+  for (const name of ['help', 'reset', 'console', 'params', 'performance']) assert.ok(four.includes(`\`${name}\``), `step 4 names the built-in ${name}`);
+});
+
+test('each extension README says to merge commands, pages and status', () => {
+  const kinds = JSON.parse(readFileSync(join(root, 'tests', 'browser', 'exemplars.json'), 'utf8'));
+  const extensions = Object.keys(kinds).filter((name) => kinds[name] === 'extension');
+  assert.ok(extensions.length >= 2, 'at least two extensions');
+  for (const name of extensions) {
+    const adapting = readFileSync(join(exemplarsDir, name, 'README.md'), 'utf8').split(/^## Adapting$/m)[1] ?? '';
+    for (const word of ['`commands`', '`pages`', '`status`']) assert.ok(adapting.includes(word), `${name}: Adapting names ${word}`);
+  }
+});
+PLAN_EOF
+```
+
+```bash red
+node --test tests/unit/skill.test.mjs
+```
+
+```expected
+pictures.md no longer says to spread an extension
+presets: Adapting names `commands`
+```
+
+**Implementation.**
+
+- `pictures.md` step 4: say that `mountKnobs` takes one `commands` map, one `pages` list and one `status` function, so a plain spread keeps only the last extension's; merge each with the project's own. Then the spec's example, indented under step 4 as a `js` block, and the spec's rule on name clashes, naming every built-in command and view. Step 5 follows unchanged.
+- Each extension README's last Adapting line becomes: `` `commands`, `pages` and `status` are single mount options, so merge this extension's into the project's: one command map, one page list, one status function. Step 4 of the skill's `pictures.md` shows how. `` Each README stays at most 250 words, and its Adapting section still names `` `status` `` and links its issue.
+- The fixture comment says it spreads the exemplar into the options because it mounts one exemplar and sets no options of its own, and that a project merges them as `pictures.md` step 4 says. The code is unchanged.
+- No shot changes: neither README has a Look point about this.
+
+**Checks:** `node --test tests/unit/skill.test.mjs` (12 pass), `npm run test:unit` (209 pass, 0 fail), then the whole browser suite as a job (130 pass at the plan's count, 0 fail).
+
+**Commit:** `fix(skill): merge an extension into the mount options`
 
 ## After the build
 

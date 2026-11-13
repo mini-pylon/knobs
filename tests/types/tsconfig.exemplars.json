@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "allowJs": true, "checkJs": true },
+  "files": [],
+  "include": ["../../skills/knobs/exemplars/**/*.js"]
+}

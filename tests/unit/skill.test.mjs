@@ -2,13 +2,29 @@
 // and free of anything that only works on one machine.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const dir = join(root, 'skills', 'knobs');
 const skillPath = join(dir, 'SKILL.md');
+const exemplarsDir = join(dir, 'exemplars');
+
+const words = text => text.split(/\s+/).filter(Boolean).length;
+
+function exemplarFolders() {
+  if (!existsSync(exemplarsDir)) return [];
+  return readdirSync(exemplarsDir, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+}
+
+// Every text file the skill ships: SKILL.md, the templates, the step files
+// and the exemplars. Screenshots are left out.
+function skillFiles() {
+  return readdirSync(dir, { recursive: true })
+    .map((f) => join(dir, f))
+    .filter((f) => statSync(f).isFile() && !f.endsWith('.png'));
+}
 
 function frontmatter(text) {
   const m = text.match(/^---\n([\s\S]*?)\n---\n/);
@@ -37,10 +53,12 @@ test('every template the skill names exists, and every template is named', () =>
 });
 
 test('nothing in the skill depends on one machine or one person', () => {
-  const files = [skillPath, ...readdirSync(join(dir, 'templates')).map((f) => join(dir, 'templates', f))];
+  const files = skillFiles();
+  assert.ok(files.includes(skillPath), 'the scan reads SKILL.md');
   for (const f of files) {
     const text = readFileSync(f, 'utf8');
     assert.doesNotMatch(text, /\/home\/|~\/linda|\bJosh\b|wings-home|git-branch|git-commit|file-issue|sharing-dev-servers/, f);
+    assert.doesNotMatch(text, /wings-vdb|mini-pylon\/tools|cloud|bird/i, f);
   }
 });
 
@@ -50,4 +68,11 @@ test('the skill installs the package from $KNOBS_DIR or a tagged GitHub release'
   assert.match(text, /github:mini-pylon\/knobs#semver:\^0\.1\.0/);
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
   assert.equal(pkg.version, '0.1.0', 'the semver range in the skill matches the package version');
+});
+
+test('each exemplar README is at most 250 words', () => {
+  for (const name of exemplarFolders()) {
+    const text = readFileSync(join(exemplarsDir, name, 'README.md'), 'utf8');
+    assert.ok(words(text) <= 250, `${name}/README.md has ${words(text)} words`);
+  }
 });

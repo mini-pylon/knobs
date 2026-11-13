@@ -456,18 +456,22 @@ PLAN_EOF
 cat > tests/browser/exemplar-serve.mjs <<'PLAN_EOF'
 // Serves the exemplar fixture for a look by hand, the way the tests serve it,
 // until Ctrl-C. `npm run exemplars:serve`, then open the printed URL.
+import { rmSync } from 'node:fs';
 import { copyFixture, serve } from './lib/harness.mjs';
 
 const fixture = await copyFixture('exemplar');
+// Vite handles SIGTERM itself, closing the server and calling process.exit(),
+// so the copy is removed on exit, whatever ends the process.
+process.on('exit', () => rmSync(fixture.root, { recursive: true, force: true }));
 const site = await serve(fixture.root);
 console.log(`${site.url}?name=<exemplar>  (Ctrl-C to stop)`);
-const stop = async () => {
-  await site.close();
-  await fixture.remove();
-  process.exit(0);
-};
-process.once('SIGINT', stop);
-process.once('SIGTERM', stop);
+process.once('SIGINT', async () => {
+  try {
+    await site.close();
+  } finally {
+    process.exit(0);
+  }
+});
 PLAN_EOF
 cat > tests/types/tsconfig.exemplars.json <<'PLAN_EOF'
 {
@@ -614,7 +618,7 @@ The rewritten `skill.test.mjs` keeps its four tests (the scan now reads every fi
   - `## Adapting`: rename the group and keys to the project's own, replace the stand-in easing with an import of the function the page animates with, and keep the dot, the trail, the 1.0 line and the units.
 - Run `npm run exemplars:shots -- curve-trace`. Read `skills/knobs/exemplars/curve-trace/shot.png` and check the Look points against it.
 
-**Checks:** `node --test tests/unit/types-exemplars.test.mjs tests/unit/skill.test.mjs`, then the `curve-trace` browser job as in Global Constraints (5 pass), then `npm run test:unit` (200 pass, 0 fail), then the whole browser suite as a job (94 pass, 0 fail).
+**Checks:** `node --test tests/unit/types-exemplars.test.mjs tests/unit/skill.test.mjs`, then the serve script's cleanup: `timeout --signal=TERM 5s node tests/browser/exemplar-serve.mjs < <(sleep 10)` prints the URL and exits 124, and `ls tests/.tmp` afterwards lists no `exemplar-*` directory (Vite also stops when its stdin closes, so the check holds stdin open), then the `curve-trace` browser job as in Global Constraints (5 pass), then `npm run test:unit` (200 pass, 0 fail), then the whole browser suite as a job (94 pass, 0 fail).
 
 **Commit:** `test(exemplars): add the exemplar bench and the curve-trace picture`
 

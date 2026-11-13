@@ -211,3 +211,78 @@ test('presets: reset still returns every default', async () => {
     await page.context().close();
   }
 });
+
+// renders-tab: a render command, a history page and a pending count. The
+// clock stays paused, so a render finishes only when a test runs it on.
+async function rendersDrawer() {
+  const { page, errors } = await openExemplar(browser, site.url, 'renders-tab');
+  await openDrawer(page);
+  return { page, errors };
+}
+
+// The status line once the drawer's 250 ms status timer has run.
+async function statusText(page) {
+  await page.clock.runFor(300);
+  return page.locator('.term-status').textContent();
+}
+
+const entries = page => page.locator('.term-page-renders .render-entry');
+
+// Sets the scene group's first control of a type to a new valid value, in
+// the page, and returns that value.
+const change = (page, kind) => page.evaluate(kind => {
+  const store = window.__exemplar.store;
+  const control = store.groups.find(group => group.name === 'scene').controls.find(item => item.type === kind);
+  const value = store.control(control.path);
+  const next = kind === 'color' ? (value === '#123456' ? '#654321' : '#123456') : (value === control.max ? control.min : control.max);
+  store.set(control.path, next);
+  return store.control(control.path);
+}, kind);
+
+test('renders-tab: the status counts changes since the last render', async () => {
+  const { page, errors } = await rendersDrawer();
+  try {
+    assert.equal(await statusText(page), '');
+    await change(page, 'number');
+    assert.equal(await statusText(page), '1 change since last render');
+    await change(page, 'color');
+    assert.equal(await statusText(page), '2 changes since last render');
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.context().close();
+  }
+});
+
+test('renders-tab: render adds one history entry, newest first, and clears the status', async () => {
+  const { page, errors } = await rendersDrawer();
+  try {
+    await change(page, 'color');
+    await type(page, 'render');
+    await page.clock.runFor(2000);
+    assert.equal(await entries(page).count(), 1);
+    assert.equal(await statusText(page), '');
+    assert.ok(await entries(page).first().locator('canvas, img').count() > 0, 'the entry has a thumbnail');
+    const newest = await change(page, 'color');
+    await type(page, 'render');
+    await page.clock.runFor(2000);
+    assert.equal(await entries(page).count(), 2);
+    assert.ok((await entries(page).first().textContent()).includes(newest), `the newest entry shows ${newest}`);
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.context().close();
+  }
+});
+
+test('renders-tab: the console takes input while a render runs', async () => {
+  const { page } = await rendersDrawer();
+  try {
+    await type(page, 'render');
+    await type(page, 'ls scene');
+    assert.match(await logText(page), /# scene/);
+    assert.equal(await entries(page).count(), 0, 'the render is still running');
+    await page.clock.runFor(2000);
+    assert.equal(await entries(page).count(), 1);
+  } finally {
+    await page.context().close();
+  }
+});

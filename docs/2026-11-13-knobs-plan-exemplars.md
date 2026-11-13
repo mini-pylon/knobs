@@ -1350,7 +1350,7 @@ presets: Adapting names `commands`
 
 **Implementation.**
 
-- `pictures.md` step 4: say that `mountKnobs` takes one `commands` map, one `pages` list and one `status` function, so a plain spread keeps only the last extension's; merge each with the project's own. Then the spec's example, indented under step 4 as a `js` block, and the spec's rule on name clashes, naming every built-in command and view. Step 5 follows unchanged.
+- `pictures.md` step 4: say that `mountKnobs` takes one `commands` map, one `pages` list and one `status` function, so a plain spread keeps only the last extension's; merge each with the project's own. Then the spec's example, indented under step 4 as a `js` block, word for word (it names each extension's result rather than mapping over a mixed list, because a list of the two results has no `pages` or `status` on the `presets` member and fails TypeScript's property check), and the spec's rule on name clashes, naming every built-in command and view. Step 5 follows unchanged.
 - Each extension README's last Adapting line becomes: `` `commands`, `pages` and `status` are single mount options, so merge this extension's into the project's: one command map, one page list, one status function. Step 4 of the skill's `pictures.md` shows how. `` Each README stays at most 250 words, and its Adapting section still names `` `status` `` and links its issue.
 - The fixture comment says it spreads the exemplar into the options because it mounts one exemplar and sets no options of its own, and that a project merges them as `pictures.md` step 4 says. The code is unchanged.
 - No shot changes: neither README has a Look point about this.

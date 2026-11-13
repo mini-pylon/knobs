@@ -92,14 +92,15 @@ SKILL.md stays at most 1,000 words. The detailed procedures live in two new file
   1. Read the chosen exemplar's README, then its code.
   2. Copy it into the project next to the mount component: `knobs/<group>.js` in a JavaScript project, `knobs/<group>.ts` with the JSDoc types turned into annotations in a TypeScript project. Replace `store.control` with the project's `control` import.
   3. Replace stand-in maths with the project's own. Where the page computes the value with a function, import that function, so the picture cannot drift from the page.
-  4. Add the picture to `visuals`, or merge the extension into the mount options: its `commands` into one map with the project's and any other extension's, its `pages` onto one list, and its `status` into one function with any the project has. A plain spread keeps only the last extension's commands and pages. Leave out what the project does not have:
+  4. Add the picture to `visuals`, or merge the extension into the mount options: its `commands` into one map with the project's and any other extension's, its `pages` onto one list, and its `status` into one function with any the project has. A plain spread keeps only the last extension's commands and pages. Name each extension's result, so each keeps its own type in a TypeScript project, and leave out what the project or an extension does not have:
      ```js
-     const added = [presets(store), rendersTab(store)];
+     const looks = presets(store);
+     const renders = rendersTab(store);
      mountKnobs(store, {
        name,
-       commands: Object.assign({}, ownCommands, ...added.map(item => item.commands)),
-       pages: [...ownPages, ...added.flatMap(item => item.pages ?? [])],
-       status: () => [ownStatus(), ...added.map(item => item.status?.() ?? '')].filter(Boolean).join('  '),
+       commands: { ...ownCommands, ...looks.commands, ...renders.commands },
+       pages: [...ownPages, ...renders.pages],
+       status: () => [ownStatus(), renders.status()].filter(Boolean).join('  '),
      });
      ```
 

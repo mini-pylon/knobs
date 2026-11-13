@@ -1,7 +1,8 @@
 // Mounts one exemplar from skills/knobs/exemplars, named by ?name=: a picture
-// keyed by its group's name, or an extension spread into the mount options.
-// The spread is safe here because the fixture mounts one exemplar and sets
-// no options of its own; a project merges them, as pictures.md step 4 says.
+// keyed by its group's name, or an extension's options copied onto the mount
+// options with Object.assign. Copying is safe here because the fixture mounts
+// one extension and has no commands, pages or status of its own to lose; a
+// project merges them, as pictures.md step 4 says.
 import { defineControls, mountKnobs } from 'knobs';
 
 // Vite may hand the keys back relative to this page or resolved, not with

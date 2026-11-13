@@ -1,6 +1,6 @@
 ---
 name: knobs
-description: Use when a prototype of a web project is starting, when asked to add a control drawer or live controls to a web project, or when a prototype with a control drawer is done and needs wrapping up
+description: Use when a prototype of a web project is starting, when asked to add a control drawer or live controls to a web project, or when a prototype with a control drawer is done and needs wrapping up, or when a control group needs a picture or a drawer command
 ---
 
 # knobs
@@ -39,6 +39,13 @@ use it in place of the plain steps below.
    - **Copy:** visible text (`text`), each defaulting to the text the
      project has now, so an untouched control changes nothing.
 
+   For each group, name a picture: the closest exemplar in the index at
+   the end, or "none" where a picture adds nothing (copy text, a lone
+   toggle). Suggest an extension where the project fits one: `presets`
+   when the user talks about distinct looks, and `renders-tab` when a
+   change is costly to see. The user trims pictures and extensions with
+   the controls.
+
    Give each control its `group.key`, type, default and the file that will
    read it. Then stop for the user to trim the list or say go.
 
@@ -58,24 +65,29 @@ use it in place of the plain steps below.
 7. **Reads.** Replace each value with a read imported from the controls
    file: `useControl('group.key')` inside a React render, `control` or
    `onControl` elsewhere.
-8. **Hand over.** Tell the user that backtick opens the drawer, `save`
-   writes `knobs.values.json`, and `~` opens the performance tab.
+8. **Pictures.** For each picture or extension the user kept, follow
+   `pictures.md`.
+9. **Hand over.** Tell the user that backtick opens the drawer, `save`
+   writes `knobs.values.json`, and `~` opens the performance tab. Show
+   the final screenshot with this hand-over.
 
 ## Wrap up
 
 When the user says the prototype is done:
 
-9. **Values.** Read `knobs.values.json`; it keeps only what differs from
-   the defaults. If the user may have changes not yet saved, ask them to
-   type `save` in the drawer first.
-10. **Commit.** Ask whether to commit the prototype branch, naming what the
+10. **Values.** Read `knobs.values.json`; it keeps only what differs from
+    the defaults. If the user may have changes not yet saved, ask them to
+    type `save` in the drawer first.
+11. **Commit.** Ask whether to commit the prototype branch, naming what the
     commit would hold. On a yes, commit it. Stop until it is committed.
-11. **Decisions note.** Fill `templates/decisions.md`: each changed
+12. **Decisions note.** Fill `templates/decisions.md`: each changed
     control, its default, the user's choice and the file that reads it,
-    naming the commit from step 10. Write it to `docs/knobs-<prototype
+    naming the commit from step 11. Write it to `docs/knobs-<prototype
     branch>.md`, unless the project keeps such notes somewhere of its own.
     Ask before committing it, as its own commit.
-12. **Leave** the prototype branch as the reference. Production gets the
+13. **Share.** Offer to share each checked picture the user liked,
+    following `share.md`.
+14. **Leave** the prototype branch as the reference. Production gets the
     chosen values written in directly, as ordinary work on its own branch.
 
 ## Never
@@ -90,3 +102,18 @@ When the user says the prototype is done:
 - Call `mountKnobs` or set a value where there is no `window`.
 - Change knobs itself to suit a project. Offer to open an issue on
   `mini-pylon/knobs` instead, and open it only on the user's yes.
+- Hand over a picture that has not been checked against its exemplar.
+- Send anything about the user's project anywhere without their yes.
+
+## Exemplars
+
+The closest picture for a group, or none where a picture adds nothing.
+
+- `curve-trace` (picture): A group that shapes an animation over time: a duration, an easing and a delay.
+- `timeline-zones` (picture): A group that shapes scrolling or paging through sections.
+- `before-after` (picture): A group that tunes how an element responds to hover or focus.
+- `angle-dial` (picture): A group that places a light, sun or any direction around a point.
+- `schedule-countdown` (picture): A group that sets how often something happens, with some randomness.
+- `cross-section` (picture): A group that shapes a soft edge, falloff or density.
+- `presets` (extension): A project whose user wants a few named looks to flip between.
+- `renders-tab` (extension): A project where a change is costly to see, so renders run on demand.

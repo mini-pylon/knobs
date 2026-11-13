@@ -167,3 +167,27 @@ test('each extension README says to merge commands, pages and status', () => {
     for (const word of ['`commands`', '`pages`', '`status`']) assert.ok(adapting.includes(word), `${name}: Adapting names ${word}`);
   }
 });
+
+// Numbered top-level list items (`<n>. ` at the start of a line), in order.
+const numbers = text => [...text.matchAll(/^(\d+)\. /gm)].map((m) => Number(m[1]));
+const range = (from, to) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
+
+test('SKILL.md has each section once, in order, and steps 1 to 14 once each', () => {
+  const text = readFileSync(skillPath, 'utf8');
+  assert.deepEqual([...text.matchAll(/^## (.+)$/gm)].map((m) => m[1]), ['Overview', 'Start', 'Wire', 'Wrap up', 'Never', 'Exemplars']);
+  assert.deepEqual(numbers(text), range(1, 14));
+});
+
+test('the exemplar index holds one lead-in line and then only index lines', () => {
+  const lines = section(readFileSync(skillPath, 'utf8'), 'Exemplars').filter((line) => line.trim());
+  assert.ok(!lines[0].startsWith('- '), 'the index starts with a lead-in line');
+  for (const line of lines.slice(1)) assert.match(line, /^- `[\w-]+` \((picture|extension)\): /);
+  assert.equal(lines.length - 1, exemplarFolders().length, 'one index line per exemplar folder');
+});
+
+test('pictures.md numbers steps 1 to 6 and share.md steps 1 to 5, each once', () => {
+  assert.deepEqual(numbers(readFileSync(join(dir, 'pictures.md'), 'utf8')), range(1, 6));
+  const share = readFileSync(join(dir, 'share.md'), 'utf8');
+  assert.deepEqual(numbers(share), range(1, 5));
+  assert.match(share, /never files the issue/, 'share.md says the agent never files the issue');
+});

@@ -39,3 +39,11 @@ test('share.md prefills the form by its text field ids', () => {
   assert.match(share, /template=exemplar\.yml/);
   for (const id of ['when', 'good', 'controls', 'code']) assert.ok(share.includes(`\`${id}\``), `share.md names the ${id} field`);
 });
+
+test('the kind dropdown offers exactly picture and extension, and only the license tick is required', () => {
+  const form = readFileSync(path('.github/ISSUE_TEMPLATE/exemplar.yml'), 'utf8');
+  const kind = form.split(/^ {2}- type: /m).find(block => /^ {4}id: kind$/m.test(block));
+  assert.deepEqual([...kind.matchAll(/^ {8}- (.+)$/gm)].map(m => m[1]), ['picture', 'extension']);
+  assert.equal(form.match(/required: true/g)?.length, 1, 'one required setting in the form');
+  assert.match(form, /^ {8}- label: This is my code and I can share it under the MIT license\n {10}required: true$/m, 'the license option is the required one');
+});

@@ -12,6 +12,7 @@ export function aliases() {
     { find: /^knobs\/react$/, replacement: join(repo, 'src/react.js') },
     { find: /^knobs\/vite$/, replacement: join(repo, 'src/vite.js') },
     { find: /^knobs$/, replacement: join(repo, 'src/index.js') },
+    { find: '@exemplars', replacement: join(repo, 'skills/knobs/exemplars') },
   ];
 }
 

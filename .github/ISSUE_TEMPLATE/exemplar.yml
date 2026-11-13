@@ -1,0 +1,48 @@
+name: Exemplar
+description: Offer a picture or a drawer extension for the skill.
+title: "exemplar: "
+labels: [exemplar]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      description: A picture draws in the drawer. An extension adds a command or a page.
+      options:
+        - picture
+        - extension
+  - type: input
+    id: when
+    attributes:
+      label: When
+      description: The one sentence that says when to use this exemplar.
+  - type: textarea
+    id: good
+    attributes:
+      label: What makes it good
+      description: The Look and Behaviour points, one per line.
+  - type: textarea
+    id: controls
+    attributes:
+      label: Controls
+      description: The control group this exemplar reads.
+      render: js
+  - type: textarea
+    id: code
+    attributes:
+      label: Code
+      description: The picture or extension, with project names taken out.
+      render: js
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot
+      description: Drop in the image you already checked.
+  - type: checkboxes
+    id: license
+    attributes:
+      label: License
+      description: Your tick is the consent to share this.
+      options:
+        - label: This is my code and I can share it under the MIT license
+          required: true

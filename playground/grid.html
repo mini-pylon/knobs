@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>knobs grid</title>
+  <link rel="stylesheet" href="./shell.css">
+  <style>
+    html, body { height: auto; }
+    .cells { display: flex; flex-wrap: wrap; gap: 16px; padding: 16px; }
+    .cell { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+    .cell iframe { border: 0; background: #fff; box-shadow: 0 0 0 1px var(--line); }
+    .cell figcaption { color: var(--dim); display: flex; gap: 10px; }
+    .cell figcaption a { margin-left: auto; }
+    .cell.failed iframe { box-shadow: 0 0 0 2px var(--err); }
+    .cell.failed .why { color: var(--err); }
+    .bar a.on { color: var(--text); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <header class="bar">
+    <strong>knobs grid</strong>
+    <nav class="sets"></nav>
+    <label>tab <input class="tab" placeholder="first group"></label>
+    <a class="shell-link" href="./">playground</a>
+  </header>
+  <main class="cells"></main>
+  <script type="module" src="./grid.js"></script>
+</body>
+</html>

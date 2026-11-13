@@ -1,3 +1,5 @@
 node_modules/
 tests/.tmp/
 .worktrees/
+playground/.shots/
+playground/drafts/

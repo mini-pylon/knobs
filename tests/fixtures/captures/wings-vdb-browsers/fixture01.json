@@ -1,0 +1,8 @@
+{
+  "ua": "Mozilla/5.0 (fixture)",
+  "at": "2026-11-13T18:00:17.132Z",
+  "storage": {
+    "wings-vdb:groups": "[\"dispersal\"]",
+    "wings-vdb:params": "{\"dispersal.hang\": 1.5, \"dispersal.expand\": 0.4, \"presence.density\": 8.6, \"cloud.light\": 1.2, \"config.retired\": 1, \"dive.in\": \"fast\", \"nowhere.at\": 3}"
+  }
+}

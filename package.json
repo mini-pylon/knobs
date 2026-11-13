@@ -30,7 +30,10 @@
     "test:unit": "node --test \"tests/unit/*.test.mjs\"",
     "test:browser": "node --test --test-concurrency=1 --test-timeout=60000 \"tests/browser/*.test.mjs\"",
     "exemplars:shots": "node tests/browser/exemplar-shots.mjs",
-    "exemplars:serve": "node tests/browser/exemplar-serve.mjs"
+    "exemplars:serve": "node tests/browser/exemplar-serve.mjs",
+    "playground": "node playground/serve.mjs",
+    "playground:shots": "node playground/shots.mjs",
+    "playground:capture": "node playground/capture.mjs"
   },
   "peerDependencies": {
     "react": ">=18",

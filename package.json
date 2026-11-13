@@ -1,6 +1,11 @@
 {
   "name": "knobs",
   "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mini-pylon/knobs.git"
+  },
   "private": true,
   "type": "module",
   "files": [
@@ -23,7 +28,7 @@
   },
   "scripts": {
     "test:unit": "node --test \"tests/unit/*.test.mjs\"",
-    "test:browser": "node --test --test-concurrency=1 \"tests/browser/*.test.mjs\""
+    "test:browser": "node --test --test-concurrency=1 --test-timeout=60000 \"tests/browser/*.test.mjs\""
   },
   "peerDependencies": {
     "react": ">=18",

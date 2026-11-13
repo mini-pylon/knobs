@@ -5,18 +5,18 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { join } from 'node:path';
 import knobs from '../../src/vite.js';
-import { collectErrors, copyFixture, launch, newPage, openDrawer, serve, type } from './lib/harness.mjs';
+import { closeAll, collectErrors, copyFixture, launch, newPage, openDrawer, serve, type } from './lib/harness.mjs';
 
 let fixture, site, browser, page, errors;
 const file = name => join(fixture.root, name);
 
 before(async () => { browser = await launch(); });
-after(async () => {
-  await page?.context().close();
-  await site?.close();
-  await fixture?.remove();
-  await browser?.close();
-});
+after(() => closeAll(
+  () => page?.context().close(),
+  () => site?.close(),
+  () => fixture?.remove(),
+  () => browser?.close(),
+));
 
 // Each test gets its own copy and server, so one test's file edits cannot
 // reach the next test's page as a late reload.

@@ -3,13 +3,13 @@ import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer as createHttp } from 'node:http';
 import { createServer } from 'vite';
-import { collectErrors, copyFixture, launch, newPage, openDrawer, type, viteConfig } from './lib/harness.mjs';
+import { closeAll, collectErrors, copyFixture, launch, newPage, openDrawer, reactDeps, type, viteConfig } from './lib/harness.mjs';
 
 let fixture, vite, http, url, browser, page, errors;
 
 before(async () => {
   fixture = await copyFixture('ssr');
-  const base = viteConfig(fixture.root);
+  const base = viteConfig(fixture.root, { deps: reactDeps });
   vite = await createServer({ ...base, appType: 'custom', server: { ...base.server, middlewareMode: true, hmr: false, ws: false } });
   http = createHttp((req, res) => vite.middlewares(req, res, async () => {
     const path = req.url.split('?')[0];
@@ -22,12 +22,12 @@ before(async () => {
   url = `http://127.0.0.1:${http.address().port}`;
   browser = await launch();
 });
-after(async () => {
-  await browser?.close();
-  await new Promise(done => http?.close(done));
-  await vite?.close();
-  await fixture?.remove();
-});
+after(() => closeAll(
+  () => browser?.close(),
+  () => new Promise(done => http ? http.close(done) : done()),
+  () => vite?.close(),
+  () => fixture?.remove(),
+));
 
 async function visit(path, saved) {
   await page?.context().close();

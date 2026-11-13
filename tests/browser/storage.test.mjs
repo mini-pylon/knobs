@@ -1,7 +1,7 @@
 import '../../src/drawer.js';
 import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { collectErrors, copyFixture, launch, newPage, openDrawer, serve, type } from './lib/harness.mjs';
+import { closeAll, collectErrors, copyFixture, launch, newPage, openDrawer, serve, type } from './lib/harness.mjs';
 
 let fixture, site, browser, page, errors;
 
@@ -10,11 +10,11 @@ before(async () => {
   site = await serve(fixture.root);
   browser = await launch();
 });
-after(async () => {
-  await browser?.close();
-  await site?.close();
-  await fixture?.remove();
-});
+after(() => closeAll(
+  () => browser?.close(),
+  () => site?.close(),
+  () => fixture?.remove(),
+));
 
 const read = id => page.locator(`#read-${id}`).textContent();
 

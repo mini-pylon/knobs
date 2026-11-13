@@ -20,11 +20,26 @@ export async function copyFixture(name) {
   await mkdir(scratch, { recursive: true });
   const root = await mkdtemp(join(scratch, `${name}-`));
   await cp(join(repo, 'tests', 'fixtures', name), root, { recursive: true });
-  return { root, remove: () => rm(root, { recursive: true, force: true }) };
+  return { root, remove: () => rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }) };
+}
+
+// The React modules the ssr fixture's browser code imports (early-document.js
+// brings react-dom/server along). They are CommonJS, so Vite must prebundle
+// them; with discovery off, nothing else is prebundled.
+export const reactDeps = ['react', 'react-dom/client', 'react-dom/server'];
+
+// Runs every teardown step in order, even after one throws, then throws the
+// first error. A browser left open keeps the test run alive forever.
+export async function closeAll(...steps) {
+  const errors = [];
+  for (const step of steps) {
+    try { await step(); } catch (error) { errors.push(error); }
+  }
+  if (errors.length) throw errors[0];
 }
 
 export function viteConfig(root, extra = {}) {
-  const { plugins = [], ...rest } = extra;
+  const { plugins = [], deps = [], ...rest } = extra;
   return {
     configFile: false,
     root,
@@ -32,7 +47,9 @@ export function viteConfig(root, extra = {}) {
     logLevel: 'error',
     plugins,
     resolve: { alias: aliases(), dedupe: ['react', 'react-dom'] },
-    optimizeDeps: { include: ['react', 'react-dom/client'] },
+    // No discovery: the optimizer runs only for deps a fixture names, since
+    // it writes .vite/deps_temp_* in the background and races fixture removal.
+    optimizeDeps: { noDiscovery: true, include: deps },
     server: { host: '127.0.0.1', port: 0, strictPort: false, fs: { allow: [repo] } },
     ...rest,
   };

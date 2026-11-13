@@ -44,13 +44,12 @@ export default function visual(store) {
       }
 
       if (snap) {
-        const blockW = sectionW - gap;
         const bandH = Math.max(6, trackH * 0.36);
         const bandY = trackTop + (trackH - bandH) / 2;
         pen.ctx.save();
         pen.ctx.globalAlpha = 0.85;
         for (let i = 0; i < sections; i++) {
-          const zoneW = snapWidth * blockW;
+          const zoneW = snapWidth * sectionW;
           const x0 = xOf(i + 0.5) - zoneW / 2;
           pen.fill(x0, bandY, zoneW, bandH, pen.fg);
         }

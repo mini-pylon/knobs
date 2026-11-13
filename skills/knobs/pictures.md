@@ -11,8 +11,30 @@ For each picture or extension the user kept:
 3. Replace the stand-in maths with the project's own. Where the page
    computes the value with a function, import that function, so the
    picture cannot drift from the page.
-4. Add the picture to `visuals`, or spread the extension into the mount
-   options, merging `status` with any status the project has.
+4. Add the picture to `visuals`, or merge the extension into the mount
+   options. `mountKnobs` takes one `commands` map, one `pages` list and one
+   `status` function, so a plain spread keeps only the last extension's
+   commands and pages. Merge each with the project's own. Name each
+   extension's result, so each keeps its own type in a TypeScript project,
+   and leave out what the project or an extension does not have:
+
+   ```js
+   const looks = presets(store);
+   const renders = rendersTab(store);
+   mountKnobs(store, {
+     name,
+     commands: { ...ownCommands, ...looks.commands, ...renders.commands },
+     pages: [...ownPages, ...renders.pages],
+     status: () => [ownStatus(), renders.status()].filter(Boolean).join('  '),
+   });
+   ```
+
+   Keep every command and page name distinct across the project and its
+   extensions, and off the built-in commands (`help`, `ls`, `get`, `set`,
+   `reset`, `save`, `download`, `load`, `export`, `import`, `on`, `clear`,
+   `close`) and views (`console`, `params`, `performance`). A built-in
+   command runs instead of an extension's, and a later page with a name
+   already used replaces the earlier one's pane. Rename on a clash.
 5. **Check.**
    - Run the dev server and open it with the agent's own browser tool, at
      least 761 px wide. Pictures and the status line are hidden below that.

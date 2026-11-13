@@ -18,4 +18,4 @@ Name the presets after the project's looks, and keep one group out of them. This
 
 If knobs grows this, prefer it: https://github.com/mini-pylon/knobs/issues/4
 
-`status` is a single mount option, so a project with its own status line merges the two into one function.
+`commands`, `pages` and `status` are single mount options, so merge this extension's into the project's: one command map, one page list, one status function. Step 4 of the skill's `pictures.md` shows how.

@@ -144,3 +144,26 @@ test('pictures.md and share.md carry the facts their steps rely on', () => {
   assert.match(share, /https:\/\/github\.com\/mini-pylon\/knobs\/issues\/new\?template=exemplar\.yml/);
   assert.match(share, /6,000/, 'share.md caps the link length');
 });
+
+test('pictures.md step 4 merges an extension, with an example and the clash rule', () => {
+  const pictures = readFileSync(join(dir, 'pictures.md'), 'utf8');
+  const four = pictures.match(/^4\. [\s\S]*?(?=^5\. )/m)?.[0] ?? '';
+  assert.ok(four, 'pictures.md has a step 4 followed by a step 5');
+  assert.doesNotMatch(pictures, /spread the extension/i, 'pictures.md no longer says to spread an extension');
+  assert.match(four, /merge/i, 'step 4 says to merge');
+  for (const word of ['`commands`', '`pages`', '`status`']) assert.ok(four.includes(word), `step 4 names ${word}`);
+  assert.match(four, /commands: /, 'the example merges commands');
+  assert.match(four, /pages: \[/, 'the example joins pages');
+  assert.match(four, /\.filter\(Boolean\)/, 'the example drops empty statuses');
+  for (const name of ['help', 'reset', 'console', 'params', 'performance']) assert.ok(four.includes(`\`${name}\``), `step 4 names the built-in ${name}`);
+});
+
+test('each extension README says to merge commands, pages and status', () => {
+  const kinds = JSON.parse(readFileSync(join(root, 'tests', 'browser', 'exemplars.json'), 'utf8'));
+  const extensions = Object.keys(kinds).filter((name) => kinds[name] === 'extension');
+  assert.ok(extensions.length >= 2, 'at least two extensions');
+  for (const name of extensions) {
+    const adapting = readFileSync(join(exemplarsDir, name, 'README.md'), 'utf8').split(/^## Adapting$/m)[1] ?? '';
+    for (const word of ['`commands`', '`pages`', '`status`']) assert.ok(adapting.includes(word), `${name}: Adapting names ${word}`);
+  }
+});

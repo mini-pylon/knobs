@@ -191,3 +191,25 @@ test('pictures.md numbers steps 1 to 6 and share.md steps 1 to 5, each once', ()
   assert.deepEqual(numbers(share), range(1, 5));
   assert.match(share, /never files the issue/, 'share.md says the agent never files the issue');
 });
+
+test('pictures.md step 4 holds the merge example exactly and every built-in name, and each extension README says to merge', () => {
+  const four = readFileSync(join(dir, 'pictures.md'), 'utf8').match(/^4\. [\s\S]*?(?=^5\. )/m)?.[0] ?? '';
+  const block = four.match(/^ *```js\n([\s\S]*?)\n *```$/m)?.[1].split('\n').map((line) => line.replace(/^ {3}/, ''));
+  assert.deepEqual(block, [
+    'const looks = presets(store);',
+    'const renders = rendersTab(store);',
+    'mountKnobs(store, {',
+    '  name,',
+    '  commands: { ...ownCommands, ...looks.commands, ...renders.commands },',
+    '  pages: [...ownPages, ...renders.pages],',
+    "  status: () => [ownStatus(), renders.status()].filter(Boolean).join('  '),",
+    '});',
+  ], 'step 4 holds the merge example word for word');
+  const builtins = ['help', 'ls', 'get', 'set', 'reset', 'save', 'download', 'load', 'export', 'import', 'on', 'clear', 'close', 'console', 'params', 'performance'];
+  for (const name of builtins) assert.ok(four.includes(`\`${name}\``), `step 4 names the built-in ${name}`);
+  const kinds = JSON.parse(readFileSync(join(root, 'tests', 'browser', 'exemplars.json'), 'utf8'));
+  for (const name of Object.keys(kinds).filter((item) => kinds[item] === 'extension')) {
+    const adapting = (readFileSync(join(exemplarsDir, name, 'README.md'), 'utf8').split(/^## Adapting$/m)[1] ?? '').replace(/\s+/g, ' ');
+    assert.ok(adapting.includes("so merge this extension's into the project's: one command map, one page list, one status function"), `${name}: Adapting says to merge all three`);
+  }
+});

@@ -58,7 +58,7 @@ Each exemplar folder holds exactly one of `visual.js` and `extension.js`.
 - **The picture area.** A picture shows only when the viewport is at least 761 px wide (`src/drawer.js` checks `matchMedia('(min-width: 761px)')`; `src/style.js` hides `.term-viz` and `.term-status` at 760 px and below). The drawer is `min(30vh, 210px)` tall, so at 1280×800 the canvas is about 600 by 155 px: a short, wide strip. Side-by-side pictures (`before-after`, `cross-section`) are designed for that strip.
 - **`README.md`**, at most 250 words, with exactly these sections:
   - `## When`: one sentence naming the kind of group or project it suits.
-  - `## What makes it good`: three to five points, each checkable by looking at a screenshot of the drawer.
+  - `## What makes it good`: three to five points. Each starts with **Look:** (checkable in a still screenshot of the drawer) or **Behaviour:** (followed by how to check it: for example "two screenshots a second apart differ only in the dot's position", or "move `jitter`: the ticks shift but keep their order"). Looping speed, a live countdown, stable randomness, preset isolation and typing during a render are behaviours.
   - `## Adapting`: what to rename, which stand-in to replace with the project's own code, and what to keep. An extension's Adapting section also links the knobs issue that would make it unnecessary ("if knobs grows this, prefer it"), and says that `status` is a single mount option, so a project with its own status line merges the two into one function.
 - **`shot.png`**: the drawer open on the exemplar's group (or page, for `renders-tab`), cropped to the drawer, made by `npm run exemplars:shots`.
 
@@ -94,7 +94,7 @@ SKILL.md stays at most 1,000 words. The detailed procedures live in two new file
   5. **Check.**
      - Run the dev server and open it with the agent's own browser tool, at least 761 px wide: pictures and the status line are hidden below that.
      - Press backtick, open the group, and screenshot the drawer at 1280 px wide and at 761 px wide (the narrowest width that shows pictures, to catch clipping).
-     - Compare each "What makes it good" point against the screenshots. Fix what fails and look again.
+     - Check each **Look:** point against the screenshots, and each **Behaviour:** point by doing what it says (more screenshots over time, or a control changed between two). Fix what fails and look again.
      - After three rounds, stop and show the user what is still off.
      - With no browser tool, ask the user to open the drawer in a window at least 761 px wide and send a screenshot.
   6. Show the final screenshot with the hand-over.
@@ -127,15 +127,16 @@ SKILL.md stays at most 1,000 words. The detailed procedures live in two new file
 ## Testing
 
 - **Fixture.** `tests/fixtures/exemplar/`: a page that reads `?name=<exemplar>` and mounts that exemplar.
-  - `tests/browser/lib/harness.mjs` adds a string alias, `{ find: '@exemplars', replacement: <repo>/skills/knobs/exemplars }`. The fixture's `main.js` uses `import.meta.glob('@exemplars/*/*.js')` (lazy) and looks up `@exemplars/<name>/controls.js` and whichever of `visual.js` and `extension.js` exists in that map. Vite does not analyse a dynamic `import()` whose path is a variable through an alias, so a template-string import is not used. If the glob does not resolve through the alias in Vite 8, the fallback is a `define` constant holding the `/@fs/` path of `skills/knobs/exemplars`, which `server.fs.allow: [repo]` already permits.
-  - It builds a store with `defineControls(groups)` and mounts the drawer: pictures as `visuals: { [group.name]: visual(store) }`, extensions spread into the options. Exemplar files import `knobs` through the existing alias.
+  - `tests/browser/lib/harness.mjs` adds a string alias, `{ find: '@exemplars', replacement: <repo>/skills/knobs/exemplars }`. The fixture's `main.js` uses `import.meta.glob('@exemplars/*/*.js')` (lazy). Vite may return the keys relative to the fixture or as resolved paths rather than with `@exemplars` kept, so the fixture first rebuilds the map: for each key it matches `/([^/]+)\/(controls|visual|extension)\.js$/` and stores the loader under `<name>/<file>`. It then looks up `<name>/controls.js` and whichever of `<name>/visual.js` and `<name>/extension.js` exists. Vite does not analyse a dynamic `import()` whose path is a variable through an alias, so a template-string import is not used. If the glob does not resolve through the alias in Vite 8, the fallback is a `define` constant holding the `/@fs/` path of `skills/knobs/exemplars`, which `server.fs.allow: [repo]` already permits.
+  - It builds a store with `defineControls(groups)` and mounts the drawer with `name: 'exemplar'`; `mountKnobs` attaches `localStorage` under `exemplar:values` (`src/drawer.js`), so a test seeds values with an init script before the page loads. Pictures go in as `visuals: { [group.name]: visual(store) }`; extensions are spread into the options. Exemplar files import `knobs` through the existing alias.
   - One server and one browser serve the whole test file, at 1280×800.
 - **`tests/browser/exemplars.test.mjs`** lists every folder under `skills/knobs/exemplars/` and, for each, checks:
   - **Shape:** `README.md` has the three sections in order; `controls.js` exists; exactly one of `visual.js` and `extension.js` exists; `shot.png` exists; a picture's `controls.js` exports `probe`, naming a number control of its group.
   - **Mounts clean:** the page mounts with no page errors and no console errors.
-  - **Pictures,** with the clock controlled as in Screenshots below (install before `goto`, open the drawer and the group, wait about 300 ms real time for the 220 ms slide, `pauseAt` a fixed time, `runFor(200)`):
-    - the canvas is not blank: some pixel has alpha above zero (`canvasVisual` clears the canvas to transparent each frame, so the drawer background is behind it, not in it);
-    - read the pixels; set `probe` to its maximum through the console; `runFor(200)` again from the same paused time; read again; the two differ. Equal clock advances make the comparison depend on the set, not on animation.
+  - **Pictures.** Each trial is a fresh page driven by the clock recipe in Screenshots below, so every trial has the same mount history and the same fake times. A trial ends by reading the canvas pixels.
+    - **Not blank:** in a default trial, some pixel has alpha above zero (`canvasVisual` clears the canvas to transparent each frame, so the drawer background is behind it, not in it).
+    - **Deterministic:** two default trials give identical pixels. This proves the procedure, so the next check means something.
+    - **Reads the store:** a trial whose init script seeds `probe` at its maximum (in the fixture's saved values, before the page loads) gives pixels that differ from a default trial. Nothing else differs between the two, so animation alone cannot make this pass. The probe is never set through the console, because opening the console page tears the picture down.
   - **`presets`:**
     - `preset` prints every preset name;
     - `preset <name>` changes the `look` values it names and no `quality` value;
@@ -152,11 +153,12 @@ SKILL.md stays at most 1,000 words. The detailed procedures live in two new file
   - the skill's description mentions pictures;
   - the existing "nothing in the skill depends on one machine or one person" test scans every file under `skills/knobs/` (exemplars, `pictures.md`, `share.md` included, PNGs excluded), and also rejects the words `wings-vdb`, `mini-pylon/tools`, `cloud` and `bird`.
 - **TypeScript.** A third compile test, built like `tests/unit/types.test.mjs` (`tsc -p` on a project under `tests/types/`), checks `skills/knobs/exemplars/**/*.js` with `allowJs` and `checkJs` against the package's public types, and expects no errors.
-- **Screenshots.** `npm run exemplars:shots` runs `tests/browser/exemplar-shots.mjs`, which writes each `shot.png`. Under `page.clock`, `requestAnimationFrame` and `performance.now` are fake and no frame runs until the clock advances, so the recipe is:
-  1. viewport 1280×800; `page.clock.install()` before `goto`;
-  2. open the drawer and the group (or page), then wait about 300 ms of real time for the 220 ms CSS slide, which the clock does not control;
-  3. `page.clock.pauseAt(<a fixed time>)`, then `page.clock.runFor(200)`, so the 66 ms frame throttle lets frames draw;
-  4. screenshot the `.term-drawer` locator.
+- **Screenshots.** `npm run exemplars:shots` runs `tests/browser/exemplar-shots.mjs`, which writes each `shot.png`. Under `page.clock`, `requestAnimationFrame`, timers and `performance.now` are fake. A clock installed without a time starts at the real time and runs until paused, which makes a fixed pause target go stale and lets frames depend on how long navigation took. The recipe, shared with the picture tests:
+  1. viewport 1280×800; `page.clock.install({ time: T0 })` with one fixed epoch `T0` in the script, then at once `page.clock.pauseAt(T0 + 1000)`, both before `goto`, so no fake time passes during navigation;
+  2. `goto`, then `runFor(100)` so the page's start-up timers fire;
+  3. open the drawer and the group (or page), `runFor(100)` for the drawer's own timers, then wait about 300 ms of real time for the 220 ms CSS slide, which the clock does not control;
+  4. `runFor(500)` so the 66 ms frame throttle lets several frames draw from the same start, giving stateful pictures (trails, traces) the same history every time;
+  5. screenshot the `.term-drawer` locator (the tests read the canvas pixels instead).
   - A rerun on one machine gives the same image. The test suite never writes shots; it only checks that they exist. Regenerating is a deliberate step, committed with the change that needs it.
 - **Install check.** vercel-labs/skills installs a skill by copying its whole directory recursively (`copyDirectory` in its `src/installer.ts`, skipping only `metadata.json`, `.git`, `__pycache__` and `__pypackages__`), so `exemplars/` and its PNGs arrive. The build confirms it once with `npx skills add` from a local path. Its default mode keeps a copy under `.agents/skills/knobs` inside the user's project, so a project's broad `include` in tsconfig or eslint may pick up the exemplar files; `pictures.md` says so in one line.
 - **The issue form,** text-field prefill and the `exemplar` label, is checked by hand once the template is on the default branch, with a link built as `share.md` describes. It cannot be tested before merge.

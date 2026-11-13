@@ -39,3 +39,8 @@ test('the test tools are pinned exactly', () => {
     assert.match(pkg.devDependencies[name], /^\d+\.\d+\.\d+$/, name);
   }
 });
+
+// A hung browser or server fails its test in a minute instead of holding the run.
+test('the browser suite gives each test a time limit', () => {
+  assert.match(pkg.scripts['test:browser'], /--test-timeout=60000\b/);
+});

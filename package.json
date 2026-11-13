@@ -23,7 +23,7 @@
   },
   "scripts": {
     "test:unit": "node --test \"tests/unit/*.test.mjs\"",
-    "test:browser": "node --test --test-concurrency=1 \"tests/browser/*.test.mjs\""
+    "test:browser": "node --test --test-concurrency=1 --test-timeout=60000 \"tests/browser/*.test.mjs\""
   },
   "peerDependencies": {
     "react": ">=18",

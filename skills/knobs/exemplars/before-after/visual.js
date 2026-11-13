@@ -7,7 +7,7 @@ const CARD_W = 112;
 const CARD_H = 64;
 const LIFT_MAX = 16;
 const SCALE_MAX = 1.2;
-// The shadow control's maximum blur, kept clear on both sides of the hover card.
+// The shadow control's maximum blur, kept clear around the hover card.
 const SHADOW_MAX = 40;
 
 /**
@@ -103,7 +103,7 @@ export default function visual(store) {
       const baseY = h - 26;
       const plotH = Math.max(1, baseY - 18);
       const roomW = Math.min(panels[0].w, panels[1].w) - 24;
-      const k = Math.min(1, roomW / (CARD_W * SCALE_MAX + 2 * SHADOW_MAX), plotH / (LIFT_MAX + CARD_H * SCALE_MAX));
+      const k = Math.min(1, roomW / (CARD_W * SCALE_MAX + 2 * SHADOW_MAX), plotH / (LIFT_MAX + CARD_H * SCALE_MAX + SHADOW_MAX));
 
       pen.line(8, baseY, w - 8, baseY, pen.dim, 1);
       pen.within(panels[0], () => {

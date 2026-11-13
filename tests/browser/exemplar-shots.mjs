@@ -6,7 +6,7 @@ import { closeAll, copyFixture, launch, serve } from './lib/harness.mjs';
 import { exemplarsDir, folders, openExemplar, settle } from './lib/exemplar.mjs';
 
 // Console lines typed before the shot, so it shows the exemplar in use.
-const DEMO = { 'renders-tab': ['render'] };
+const DEMO = { 'renders-tab': ['render', 'scene.count 4'] };
 
 const names = process.argv.slice(2).length ? process.argv.slice(2) : folders();
 const fixture = await copyFixture('exemplar');

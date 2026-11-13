@@ -1,0 +1,68 @@
+:root {
+  --bg: #0d1014; --panel: #141920; --line: #262d38; --text: #d7dbe2; --dim: #7d8696;
+  --accent: #e8c547; --err: #ff7a6b; --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.5 var(--mono); }
+button, select, input, textarea { font: inherit; color: inherit; }
+button { background: none; border: 1px solid var(--line); border-radius: 4px; padding: 2px 10px; color: var(--accent); cursor: pointer; }
+button:hover, button.on { border-color: var(--accent); }
+button.on { background: #e8c54714; }
+select, input { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px; }
+a { color: var(--accent); }
+
+.bar { display: flex; gap: 18px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.bar label { color: var(--dim); display: flex; gap: 6px; align-items: center; }
+.bar .seed { width: 7em; } .bar .count { width: 5em; }
+.bar .grid-link { margin-left: auto; }
+.bar .seed-field[hidden] { display: none; }
+
+.panes { display: grid; grid-template-columns: minmax(260px, 22%) 1fr minmax(300px, 28%); height: calc(100% - 49px); }
+.panes > section { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--line); }
+.pane-head { display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); color: var(--dim); flex-wrap: wrap; }
+.pane-head span { margin-right: auto; }
+
+.source .hint { margin: 8px 12px 0; color: var(--dim); font-size: 12px; }
+.source textarea { flex: 1; margin: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 8px; resize: none; font-size: 12px; }
+.source .error { margin: 0 12px 12px; padding: 8px; border: 1px solid var(--err); color: var(--err); border-radius: 4px; white-space: pre-wrap; }
+
+.frame-box { flex: 1; display: flex; justify-content: center; overflow: auto; background: #080a0d; }
+.stage { border: 0; height: 100%; width: 100%; background: #fff; }
+.stage.sized { box-shadow: 0 0 0 1px var(--line); }
+
+.views { border-right: 0; }
+.view { display: none; flex: 1; overflow: auto; padding: 10px 12px; }
+.view.on { display: block; }
+.view h3 { margin: 12px 0 4px; font-size: 13px; color: var(--accent); font-weight: normal; }
+.view h3:first-child { margin-top: 0; }
+.view .about { color: var(--dim); margin: 0 0 6px; }
+.view table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+.view td { padding: 2px 8px 2px 0; vertical-align: top; border-bottom: 1px solid #1c222b; overflow-wrap: anywhere; }
+.view td:first-child { width: 42%; }
+.view td:last-child { width: 30%; padding-right: 0; }
+.view td:only-child, .view td:first-child:nth-last-child(2) + td { width: auto; }
+.view .type { color: var(--dim); }
+.view .changed { color: var(--accent); }
+.view pre { margin: 0 0 12px; white-space: pre-wrap; word-break: break-word; }
+.view .tag { color: var(--dim); font-size: 11px; border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; margin-left: 6px; }
+
+@media (max-width: 900px) {
+  .panes { grid-template-columns: 1fr; height: auto; }
+  .panes > section { border-right: 0; border-bottom: 1px solid var(--line); min-height: 50vh; }
+}
+
+.paste { margin: 0 12px 12px; border: 1px solid var(--line); border-radius: 4px; }
+.paste summary { padding: 6px 10px; cursor: pointer; color: var(--accent); }
+.paste .hint { margin: 0 10px 8px; }
+.paste form { display: flex; flex-direction: column; gap: 8px; padding: 0 10px 10px; }
+.paste label { display: flex; flex-direction: column; gap: 4px; color: var(--dim); }
+.paste input { width: 100%; }
+.paste textarea { min-height: 7em; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 6px; font-size: 12px; resize: vertical; }
+.paste-error { margin: 0; padding: 8px; border: 1px solid var(--err); color: var(--err); border-radius: 4px; white-space: pre-wrap; }
+.source:has(.paste[open]) > textarea { flex: 0 0 8em; }
+.view .untranslated { margin: 0 0 8px; padding-left: 18px; color: var(--dim); }
+.view .untranslated li { margin-bottom: 4px; }
+.view select.value-set { max-width: 100%; margin-bottom: 4px; }
+.view figure.shot { margin: 0 0 12px; }
+.view figure.shot img { display: block; max-width: 100%; border: 1px solid var(--line); }
+.view figure.shot figcaption { color: var(--dim); font-size: 12px; }

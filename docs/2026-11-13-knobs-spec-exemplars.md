@@ -3,9 +3,11 @@ title: "knobs exemplars: example pictures and drawer extensions for the skill"
 kind: spec
 target: knobs
 topic: exemplars
-status: draft
+status: approved
 written: 2026-11-13T04:32:25Z
 by: claude
+approved_at: 2026-11-13T04:52:22Z
+approved_by: josh
 ---
 
 # knobs exemplars: example pictures and drawer extensions for the skill

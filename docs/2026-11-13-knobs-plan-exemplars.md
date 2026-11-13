@@ -25,9 +25,9 @@ by: claude
 - Build each task to its description and no further. A later exemplar's tests fail until its own task, and that is expected. A test that seems impossible to pass means the implementation has drifted from the description: stop and report it. Never weaken, skip or delete a check or a test, and never edit a test to make it pass.
 - Dependencies: a worktree starts with no `node_modules`. Run `npm ci --prefer-offline --ignore-scripts` first.
 - Unit tests take a few seconds and run directly: `npm run test:unit`, or `node --test tests/unit/<file>`.
-- Browser tests run as check jobs, never backgrounded by hand. One exemplar during a task: `~/linda/skills/handoff-launch/scripts/launch-headless job --repo <worktree> --topic exemplars-<name> --cost 1 -- paced node --test --test-concurrency=1 --test-timeout=60000 --test-name-pattern='^<name>: ' tests/browser/exemplars.test.mjs`. The whole suite at a milestone's end: `~/linda/skills/handoff-launch/scripts/launch-headless job --repo <worktree> --topic exemplars-browser --cost 1 -- paced npm run test:browser`. Each prints `job <run dir>`. Wait in the foreground with `until [ "$(jq -r .status <run dir>/meta.json)" != running ]; do sleep 10; done`, rerunning it if the shell call times out. `exit:0` passes; the output is `<run dir>/stdout.log`. Exit 8 means not admitted (the machine is busy): wait a minute and launch it again. Never run the browser suite outside a job.
+- Browser tests run as check jobs, never backgrounded by hand. One exemplar during a task: `~/linda/skills/handoff-launch/scripts/launch-headless job --repo <worktree> --topic exemplars-<name> --cost 1 -- paced node --test --test-concurrency=1 --test-timeout=60000 --test-name-pattern='^<name>: ' tests/browser/exemplars.test.mjs`. The whole suite at a milestone's end: `~/linda/skills/handoff-launch/scripts/launch-headless job --repo <worktree> --topic exemplars-browser --cost 1 -- paced npm run test:browser`. Each prints `job <run dir>`. Wait in the foreground with `until [ "$(jq -r .status <run dir>/meta.json)" != running ]; do sleep 10; done`, rerunning it if the shell call times out. `exit:0` passes; the output is `<run dir>/stdout.log`. Exit 8 means not admitted (the machine is busy): wait a minute and launch it again, at most ten launches for one check. After the tenth refusal, stop at that task: do not commit it (a check that could not run has not passed), and end with the closing report, naming the check and the refusal reason the last launch printed on stderr. Never run the browser suite outside a job.
 - The shots script is not a test. `npm run exemplars:shots -- <name>` takes a few seconds and runs directly. Each task regenerates only its own exemplar's shot. Read the PNG as an image and check each **Look:** point against it before committing it with the exemplar. If regenerating changes another exemplar's `shot.png`, stop and report it.
-- The live environment: tests ask the operating system for a free port and never use a fixed one. The fixture is copied into `tests/.tmp/`, which git ignores. Never read or write `/home/jmo/linda/repos/wings-vdb` or any mini-pylon repository other than this one. The exemplars are written fresh from the spec's table and this plan, not copied from anywhere. Task 10's install check is the only step that needs the network.
+- The live environment: tests ask the operating system for a free port and never use a fixed one. The fixture is copied into `tests/.tmp/`, which git ignores. Never read or write `/home/jmo/linda/repos/wings-vdb` or any mini-pylon repository other than this one. The exemplars are written fresh from the spec's table and this plan, not copied from anywhere. Two steps need the network: `npm ci --prefer-offline` fetches whatever the npm cache lacks, and Task 10's install check fetches the `skills` CLI.
 - Commits go through git-commit, staged by path. The last line of every commit message is exactly `Generated with wings.computer`, and no harness or model is named. Never `git add -A` or `git add .`, and never push.
 - Use simple shell commands. If the tree has drifted from a task's assumption (an apply block fails, or a red prints something other than its expected text), stop and report; do not adapt silently.
 
@@ -35,7 +35,7 @@ Where the spec was silent, this plan decided:
 
 1. **A list of shipped exemplars.** `tests/browser/exemplars.json` maps each shipped exemplar to its kind. The browser test covers every name in it plus every folder on disk, so a missing folder fails instead of going untested, and a folder curated later is still tested. Each exemplar's task adds its entry.
 2. **Test names start with the exemplar**, as `<name>: <check>`, so `--test-name-pattern '^<name>: '` runs one exemplar.
-3. **The shape check is stricter than the spec's list.** The folder holds exactly the four files. `shot.png` starts with the PNG signature. The README's `## ` sections are exactly When, What makes it good, Adapting, in that order. A `# <name>` title line above them is allowed. When is one sentence: it ends with a period and has no other period, so no "e.g.". What makes it good has three to five bullets, each line starting `- **Look:** ` or `- **Behaviour:** `. An extension's Adapting section links a `https://github.com/mini-pylon/knobs/issues/<n>` URL and names `` `status` ``. The code file's first line is `// @ts-check`. A picture's `probe` names a number control of its one group whose default is below its maximum, because a probe that starts at its maximum changes nothing when the test sets it there. A picture reads values only through literal `store.control('<group>.<key>')` calls naming its own group's controls, its probe among them, so the reads are easy to find when adapting.
+3. **The shape check is stricter than the spec's list.** The folder holds exactly the four files. `shot.png` starts with the PNG signature. The README's `## ` sections are exactly When, What makes it good, Adapting, in that order. A `# <name>` title line above them is allowed. When is one sentence: it ends with a period and has no other period, so no "e.g.". It is also at most 15 words, because Task 9 copies it word for word into SKILL.md's index, where the 1,000-word cap leaves room for about that much; no test counts this, so the builder does. What makes it good has three to five bullets, each line starting `- **Look:** ` or `- **Behaviour:** `. An extension's Adapting section links a `https://github.com/mini-pylon/knobs/issues/<n>` URL and names `` `status` ``. The code file's first line is `// @ts-check`. A picture's `probe` names a number control of its one group whose default is below its maximum, because a probe that starts at its maximum changes nothing when the test sets it there. A picture reads values only through literal `store.control('<group>.<key>')` calls naming its own group's controls, its probe among them, so the reads are easy to find when adapting.
 4. **A picture's label** (the canvas `aria-label`) has at least three words.
 5. **The recipe waits for the mount.** The fixture loads the exemplar with dynamic imports, which can finish after `load`. So between `goto` and the first `runFor(100)`, the shared helper waits for `[data-knobs]`, or for `body[data-error]` when the exemplar is missing. Fake time does not move during that wait, so frame times are unchanged.
 6. **What an extension's tests and shot open:** its first page if it has pages, otherwise its first group. Before the shot, the shots script types console lines from a small map: `render` for `renders-tab`, so its history is not empty. `presets` shows its `look` group at the defaults.
@@ -58,7 +58,7 @@ The plan's author found nothing in the spec wrong. Its recipe and its alias-and-
 ## Review Focus
 
 1. **How good the pictures are.** The tests prove that a picture mounts clean, draws, repeats exactly and reads the store. They do not prove it is good. Read every `shot.png` against the spec's table and the README's Look points: units on the axes, labels on both sides, one shared scale.
-2. **Behaviour points no test covers:** `curve-trace` looping at true speed; `timeline-zones` dropping its zones when snap is off; `schedule-countdown` keeping its draws stable (moving `interval` stretches the ticks instead of reshuffling them) and counting down live; `cross-section` staying cheap enough to draw every frame. Check each by doing what its README says, on the fixture served the way the tests serve it (`serve((await copyFixture('exemplar')).root)` from `tests/browser/lib/harness.mjs`, which carries the `@exemplars` alias), at `?name=<name>`.
+2. **Behaviour points no test covers:** `curve-trace` looping at true speed; `timeline-zones` dropping its zones when snap is off; `schedule-countdown` keeping its draws stable (moving `interval` stretches the ticks instead of reshuffling them) and counting down live; `cross-section` staying cheap enough to draw every frame. Check each by doing what its README says, on the fixture served the way the tests serve it: `npm run exemplars:serve` prints the URL, then open it at `?name=<name>` and stop the server with Ctrl-C.
 3. **The 761 px width.** Tests and shots run at 1280×800. The side-by-side pictures (`before-after`, `cross-section`) and the dial are designed for the strip, and only a look at 761 px wide shows clipping.
 4. **Neutral subjects.** The scan rejects `cloud` and `bird`, but not every name from the sources. Confirm that no exemplar, README or skill text names a project, a person, or a subject from the source code the spec lists.
 5. **The skill text.** It stays under 1,000 words and must still read as one procedure: Propose names a picture per group, step 8 sends the agent to `pictures.md`, the Share line follows the decisions note, and the two Never lines are there. `pictures.md` and `share.md` must match the spec's numbered lists.
@@ -66,14 +66,14 @@ The plan's author found nothing in the spec wrong. Its recipe and its alias-and-
 
 ## Milestones
 
-- **Milestone 1: the exemplar bench and `curve-trace`** (Task 1). Ends with the fixture, the shared clock recipe, the shots script, the compile test and the widened skill scan in place, and one picture exemplar passing end to end. Reviewer brief: run the fixture by hand on `curve-trace` and check Review Focus 1 to 3 for it; confirm the harness change is the one alias line, and that the shots script writes only the names it is given.
+- **Milestone 1: the exemplar bench and `curve-trace`** (Task 1). Ends with the fixture, the shared clock recipe, the shots script, the compile test and the widened skill scan in place, and one picture exemplar passing end to end. Reviewer brief: run the fixture by hand on `curve-trace` (`npm run exemplars:serve`) and check Review Focus 1 to 3 for it; confirm the harness change is the one alias line, and that the shots script writes only the names it is given.
 - **Milestone 2: the other five pictures** (Tasks 2 to 6). Ends with six picture exemplars passing. Reviewer brief: check Review Focus 1 to 4 for each picture, and that no picture calls `Math.random`, `Date` or `performance.now`.
 - **Milestone 3: the two extensions** (Tasks 7 and 8). Ends with `presets` and `renders-tab` passing their behaviour tests. Reviewer brief: check that each README links its issue (#4, #10) and says how to merge `status`, that the stand-in render is plainly marked as the part to replace, and that the `renders` page styles itself and needs no drawer class.
 - **Milestone 4: the skill text, the issue form and the install check** (Tasks 9 and 10). Ends with the skill indexing all eight exemplars, `pictures.md` and `share.md` written, and the form in place. Reviewer brief: check Review Focus 5 and 6, read `pictures.md` and `share.md` against the spec's lists, and read the closing report for the install check's result.
 
 ### Task 1: the exemplar bench and `curve-trace`
 
-**Files:** edit `tests/browser/lib/harness.mjs`, `tests/unit/skill.test.mjs` and `package.json`. Create `tests/fixtures/exemplar/index.html`, `tests/fixtures/exemplar/main.js`, `tests/browser/lib/exemplar.mjs`, `tests/browser/exemplars.json`, `tests/browser/exemplars.test.mjs`, `tests/browser/exemplar-shots.mjs`, `tests/types/tsconfig.exemplars.json`, `tests/unit/types-exemplars.test.mjs`, and `skills/knobs/exemplars/curve-trace/` (`README.md`, `controls.js`, `visual.js`, `shot.png`).
+**Files:** edit `tests/browser/lib/harness.mjs`, `tests/unit/skill.test.mjs` and `package.json`. Create `tests/fixtures/exemplar/index.html`, `tests/fixtures/exemplar/main.js`, `tests/browser/lib/exemplar.mjs`, `tests/browser/exemplars.json`, `tests/browser/exemplars.test.mjs`, `tests/browser/exemplar-shots.mjs`, `tests/browser/exemplar-serve.mjs`, `tests/types/tsconfig.exemplars.json`, `tests/unit/types-exemplars.test.mjs`, and `skills/knobs/exemplars/curve-trace/` (`README.md`, `controls.js`, `visual.js`, `shot.png`).
 
 These facts must hold for the plan to work. The first probe installs the dependencies every later block needs:
 
@@ -453,6 +453,22 @@ try {
   await closeAll(() => browser.close(), () => site.close(), () => fixture.remove());
 }
 PLAN_EOF
+cat > tests/browser/exemplar-serve.mjs <<'PLAN_EOF'
+// Serves the exemplar fixture for a look by hand, the way the tests serve it,
+// until Ctrl-C. `npm run exemplars:serve`, then open the printed URL.
+import { copyFixture, serve } from './lib/harness.mjs';
+
+const fixture = await copyFixture('exemplar');
+const site = await serve(fixture.root);
+console.log(`${site.url}?name=<exemplar>  (Ctrl-C to stop)`);
+const stop = async () => {
+  await site.close();
+  await fixture.remove();
+  process.exit(0);
+};
+process.once('SIGINT', stop);
+process.once('SIGTERM', stop);
+PLAN_EOF
 cat > tests/types/tsconfig.exemplars.json <<'PLAN_EOF'
 {
   "extends": "./tsconfig.json",
@@ -578,7 +594,7 @@ The rewritten `skill.test.mjs` keeps its four tests (the scan now reads every fi
 
 **Implementation.**
 
-- `package.json`: add the script `"exemplars:shots": "node tests/browser/exemplar-shots.mjs"` beside `test:browser`. Nothing else in the file changes, and `files` stays `["src", "types"]`.
+- `package.json`: add the scripts `"exemplars:shots": "node tests/browser/exemplar-shots.mjs"` and `"exemplars:serve": "node tests/browser/exemplar-serve.mjs"` beside `test:browser`. Nothing else in the file changes, and `files` stays `["src", "types"]`.
 - `skills/knobs/exemplars/curve-trace/controls.js`: starts with `// @ts-check`, then `/** @type {import('knobs').Group[]} */ export const groups`, holding one group, `motion`, whose `about` names what it shapes (for example how a panel eases in). Its controls: `duration` (number, ms, a range a UI animation uses, such as 100 to 2000, step 10), `ease` (select: `linear`, `ease-out`, `spring`), `overshoot` (number, 0 to about 0.5), `delay` (number, ms, starting at 0). Each `about` gives the unit. Export `probe = 'motion.duration'`.
 - `visual.js`: starts with `// @ts-check`. Its default export takes `store` (JSDoc `import('knobs').Store`) and returns `canvasVisual(label, make)`, with a label describing the picture, such as "Progress over time, with a dot running along the curve". The drawing:
   - Progress over time as a curve across the strip, from 0 to the duration, with a dashed line at progress 1.0 so overshoot shows above it.
@@ -587,6 +603,7 @@ The rewritten `skill.test.mjs` keeps its four tests (the scan now reads every fi
   - A fading trail of the dot's last few positions, kept in the closure that `make` returns. Each point is drawn dimmer the older it is.
   - The easing maths is a small stand-in function in the file (`linear`, a cubic ease-out, and a spring that overshoots by `overshoot` and settles), marked in a comment as the part to replace with the project's own easing.
   - Every read is a literal `store.control('motion.<key>')`, turned into a number with `Number(...)` where it is one, so the file type-checks under `strict`.
+  - Type each point array with JSDoc, `/** @type {[number, number][]} */ const points = [];`. `Pen.plot` takes `ReadonlyArray<readonly [number, number]>`, and an untyped `[]` that is pushed to infers `number[][]`, which fails the compile test with an error that reads like a library bug. Every later picture does the same.
 - `README.md`, at most 250 words, with a `# curve-trace` title, then:
   - `## When`: one sentence, such as "A group that shapes an animation over time: a duration, an easing and a delay."
   - `## What makes it good`, four points:
@@ -789,8 +806,8 @@ missing exemplar folder: cross-section
 
 **Implementation.**
 
-- Group `edge`: `radius`, `softness`, `noise` (numbers). `probe = 'edge.radius'`.
-- Left: a small per-pixel slice (about 64 by 32 pixels, made once with `pixels()` and refilled each frame) across the edge of a soft round shape. Density is a smooth step over the distance from the shape's centre minus `radius`, `softness` wide, plus noise from a fixed hash of the pixel's coordinates (not `Math.random`). The slice is drawn scaled up with `imageSmoothingEnabled = false`. Right: the density profile along the slice's middle row, as a line, with a dashed threshold at 0.5 marked and labelled. The slice and the profile cover the same distance range on one x scale, so the edge in the slice lines up with the profile's crossing. The density maths is the marked stand-in.
+- Group `edge`: `radius` (number, px, 8 to 56, default 32, step 1), `softness` (number, px, 1 to 24, default 8, step 1), `noise` (number, a density amplitude, 0 to 0.5, default 0.1, step 0.01). Each `about` gives the unit. `probe = 'edge.radius'`.
+- Left: a small per-pixel slice (64 by 32 pixels, made once with `pixels()` and refilled each frame) across the edge of a soft round shape. The slice's x axis is distance from the shape's centre, 0 to 64 px, one slice pixel per px, so every `radius` in range, its maximum included, puts the edge inside the slice and moving the probe moves the edge. Density is a smooth step over the distance from the shape's centre minus `radius`, `softness` wide, plus noise from a fixed hash of the pixel's coordinates (not `Math.random`). The slice is drawn scaled up with `imageSmoothingEnabled = false`. Right: the density profile along the slice's middle row, as a line, with a dashed threshold at 0.5 marked and labelled. The slice and the profile cover the same distance range on one x scale, so the edge in the slice lines up with the profile's crossing. The density maths is the marked stand-in.
 - README:
   - When: a group that shapes a soft edge, falloff or density.
   - Points:
@@ -929,14 +946,14 @@ missing exemplar folder: presets
 **Implementation.**
 
 - `controls.js`: two groups. `look`: `background` (color), `accent` (color), `radius` (number, px), `spacing` (number, px). `quality`: `resolution` (number), `samples` (number, step 1). No `probe`.
-- `extension.js`: starts with `// @ts-check`. It has a named export `presets`, as in Global Constraints decision 7: at least two presets with plain names (for example `dusk` and `airy`), each with an `about` and a partial set of `look` values. Its default export takes `store` and returns `{ commands: { preset } }`:
+- `extension.js`: starts with `// @ts-check`. It has a named export `presets`, as in Global Constraints decision 7: at least two presets with plain names (for example `dusk` and `airy`), each with an `about` and a partial set of `look` values. Every preset changes at least one `look` value from its default, because the `reset` test applies the first one and expects something to have changed. Its default export takes `store` and returns `{ commands: { preset } }`:
   - `preset` with no argument returns one line per preset, with its name and `about`.
   - `preset <name>` calls `store.set` for exactly the paths the preset names and returns a line saying what it applied. It never touches `quality` or any `look` path the preset does not name.
   - An unknown name throws an `Error` naming it and listing the known names.
   - The command's `usage` is `[name]`, and its `about` says it lists or applies presets.
   - A comment marks `quality` as the kept group and says how to keep another.
 - README:
-  - When: a project whose user talks about distinct looks, or wants to flip between a few named sets of values.
+  - When: a project whose user wants a few named looks to flip between.
   - Points:
     - **Behaviour:** `preset` lists each preset with its `about`.
     - **Behaviour:** `preset <name>` sets only the keys the preset names. Check with `ls look` before and after.
@@ -1063,10 +1080,10 @@ missing exemplar folder: renders-tab
 - `extension.js`: starts with `// @ts-check`. Its default export takes `store` and returns `{ commands: { render }, pages: [renders], status }`, as in Global Constraints decision 9:
   - `render` takes a snapshot of every value, starts the stand-in render and returns a short line (such as `rendering…`) at once. The stand-in waits 800 ms on `setTimeout`, then draws a small thumbnail on a canvas from the snapshot (shapes sized and coloured by the values). A comment marks the stand-in as the part to replace with the project's real render, and says the real one must not block the page while it runs. When it finishes, it records the snapshot as the last render and adds an entry.
   - A `render` typed while one runs prints `already rendering` and starts nothing.
-  - The `renders` page (`name: 'renders'`, an `about` line) keeps a history, newest first. Each entry is an element with class `render-entry`, holding the thumbnail and a line of every value it used. The page appends its own `<style>` to its host, because the drawer's stylesheet does not cover pages. Before the first render, the page says there are no renders yet.
+  - The `renders` page (`name: 'renders'`, an `about` line) keeps a history, newest first. Each entry is an element with class `render-entry`, holding the thumbnail and a line of every value it used, each printed as text with `String(value)` exactly as the store returns it (a color stays lowercase `#rrggbb`, not a swatch alone), because a test looks for that text. The page appends its own `<style>` to its host, because the drawer's stylesheet does not cover pages. Before the first render, the page says there are no renders yet.
   - `status` returns `''` when nothing has changed, `1 change since last render`, or `N changes since last render`.
 - README:
-  - When: a project where a change is costly to see, so the user batches changes and renders on demand.
+  - When: a project where a change is costly to see, so renders run on demand.
   - Points:
     - **Look:** the pending count is in the status line.
     - **Look:** each history entry shows its values and a thumbnail, newest first.
@@ -1168,7 +1185,7 @@ node --test tests/unit/skill.test.mjs
 SKILL.md has an ## Exemplars section
 ```
 
-**Implementation.** SKILL.md stays at most 1,000 words, so each change is short. The spec's Skill changes section is the source; this is what each place must say.
+**Implementation.** SKILL.md stays at most 1,000 words, so each change is short. It has 691 at the base, which leaves about 300 words for everything below. The eight index lines take about 150 of them (each When sentence is at most 15 words, decision 3), so the description, Propose, steps 8 and 13, the Never lines and the index's lead-in share about 150. If the file comes out over 1,000, shorten the Propose addition first, then trim existing wording in Start and Wire; never shorten an index line, which must match its README. The spec's Skill changes section is the source; this is what each place must say.
 
 - **Description:** append ", or when a control group needs a picture or a drawer command" to the existing sentence.
 - **Step 3, Propose:** after the three groups, add that each group gets a picture: the closest exemplar from the index at the end, or "none" where a picture adds nothing (copy text, a lone toggle). Also suggest an extension where the project fits one: `presets` when the user talks about distinct looks, and `renders-tab` when a change is costly to see. The user trims pictures and extensions with the controls.
@@ -1274,8 +1291,8 @@ ISSUE_TEMPLATE/exemplar.yml
   - `screenshot`: a textarea that asks for the image the user drops in.
   - `license`: a checkboxes field with one required option, "This is my code and I can share it under the MIT license".
 
-  Give each field a short label and description. The form is not part of the npm package and needs no other change.
-- **The install check**, once. It needs the network to fetch the `skills` CLI. In an empty temporary directory outside the repository, with `git init` run there, run `npx skills add <worktree path>` and install the `knobs` skill into that project, answering any prompts. Then confirm that `.agents/skills/knobs/exemplars/` holds all eight folders, each with its `shot.png`, and that `pictures.md` and `share.md` are there. Delete the temporary directory. If the CLI cannot run here (no network, or a prompt the run cannot answer), do not work around it: say so in the closing report, and the driver runs it (After the build).
+  The `body` holds these seven fields and nothing else: no `type: markdown` preamble or other block, because the test requires exactly this list. Give each field a short label and description. The form is not part of the npm package and needs no other change.
+- **The install check**, once. It needs the network to fetch the `skills` CLI. In an empty temporary directory outside the repository, with `git init` run there, run `timeout 300 npx --yes skills add <worktree path> --skill knobs -y`, which installs the `knobs` skill into that project without prompting. A run has no terminal to answer a prompt on, so never run it without `-y` and the `timeout`. Then confirm that `.agents/skills/knobs/exemplars/` holds all eight folders, each with its `shot.png`, and that `pictures.md` and `share.md` are there. Delete the temporary directory. If the CLI cannot run here (no network, a non-zero exit, or the `timeout` ending it), do not work around it: say so in the closing report, and the driver runs it (After the build).
 
 **Checks:** `node --test tests/unit/exemplar-form.test.mjs` (2 pass), `npm run test:unit` (207 pass, 0 fail), then the whole browser suite as a job (130 pass, 0 fail).
 

@@ -3,10 +3,12 @@ title: "knobs capture source fixtures: each project's own drawer, pictures and s
 kind: spec
 target: knobs
 topic: capture-source-fixtures
-status: draft
+status: approved
 written: 2026-11-13T22:46:39Z
 by: claude
 worktree: /home/jmo/linda/repos/knobs/.worktrees/capture-source-fixtures
+approved_at: 2026-11-14T01:08:12Z
+approved_by: josh
 ---
 
 # knobs capture source fixtures: each project's own drawer, pictures and scene, vendored and served by the playground

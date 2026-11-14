@@ -454,6 +454,34 @@ test('mini-pylon: a final that is not a PNG names the file', async () => {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('mini-pylon: a Python step that does not finish names the step', { timeout: 10000 }, async () => {
+  const dir = scratch();
+  try {
+    const checkout = copy(dir, 'mini-pylon');
+    writeFileSync(join(checkout, 'tools', 'scene_params.py'), 'import time\ntime.sleep(5)\n');
+    await assert.rejects(miniPylon.read(checkout, { timeout: 200 }), error => {
+      assert.match(error.message, /^mini-pylon: reading the schema: timed out$/);
+      assert.doesNotMatch(error.message, /time\.sleep/);
+      assert.doesNotMatch(error.message, /python3 -B -c/);
+      return true;
+    });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('mini-pylon: recording that does not finish names the step', { timeout: 10000 }, async () => {
+  const dir = scratch();
+  try {
+    const checkout = copy(dir, 'mini-pylon');
+    writeFileSync(join(checkout, 'tools', 'scene_params.py'), 'import time\ntime.sleep(5)\n');
+    await assert.rejects(miniPylon.record(checkout, join(dir, 'source'), { timeout: 200 }), error => {
+      assert.match(error.message, /^mini-pylon: reading what the server would answer: timed out$/);
+      assert.doesNotMatch(error.message, /time\.sleep/);
+      assert.doesNotMatch(error.message, /python3 -B -c/);
+      return true;
+    });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('mini-pylon: a failed downscale names the final', async () => {
   const dir = scratch();
   try {

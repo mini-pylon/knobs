@@ -15,7 +15,7 @@ export const repo = fileURLToPath(new URL('../..', import.meta.url));
 // The checkout's branch, commit and dirty flag; null for each outside git,
 // or when the folder sits inside some other repository.
 export function source(repo, dir) {
-  const git = (...args) => execFileSync('git', ['--no-optional-locks', '-C', dir, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  const git = (...args) => execFileSync('git', ['--no-optional-locks', '-C', dir, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 120000 }).trim();
   try {
     if (realpathSync(git('rev-parse', '--show-toplevel')) !== realpathSync(dir)) throw new Error('not its own repository');
     return { repo, branch: git('rev-parse', '--abbrev-ref', 'HEAD'), commit: git('rev-parse', 'HEAD'), dirty: git('status', '--porcelain') !== '' };

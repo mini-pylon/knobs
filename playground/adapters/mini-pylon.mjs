@@ -46,7 +46,7 @@ print(json.dumps(scene_params.schema()))
 
 // The program goes in a temp file, never on the command line, so a failure
 // names the step and Python's own stderr instead of the program text.
-function runPython(program, args, { input, what, cwd }) {
+function runPython(program, args, { input, what, cwd, timeout = 120000 }) {
   const dir = mkdtempSync(join(tmpdir(), 'knobs-py-'));
   try {
     const file = join(dir, 'run.py');
@@ -56,10 +56,12 @@ function runPython(program, args, { input, what, cwd }) {
         cwd,
         encoding: 'utf8',
         input,
+        timeout,
         stdio: ['pipe', 'pipe', 'pipe'],
         env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
       });
     } catch (error) {
+      if (error.code === 'ETIMEDOUT') throw new Error(`mini-pylon: ${what}: timed out`);
       const lines = `${error.stderr ?? ''}`.trim().split(/\r?\n/).filter(line => line.trim() !== '').slice(-20);
       throw new Error(`mini-pylon: ${what}: ${lines.join('\n') || 'Python failed'}`);
     }
@@ -98,8 +100,8 @@ function control(v) {
   return out;
 }
 
-export async function read(checkout) {
-  const text = runPython(SCHEMA, [join(checkout, 'tools')], { what: 'reading the schema', cwd: checkout });
+export async function read(checkout, { timeout } = {}) {
+  const text = runPython(SCHEMA, [join(checkout, 'tools')], { what: 'reading the schema', cwd: checkout, timeout });
   const schema = pythonJson(text, 'reading the schema');
   const groups = schema.groups.map(g => ({ name: g.name, ...(g.about ? { about: g.about } : {}), controls: g.vars.map(control) }));
 
@@ -201,11 +203,12 @@ print(json.dumps({
 }))
 `;
 
-function ask(checkout, payloads, what) {
+function ask(checkout, payloads, what, timeout) {
   const text = runPython(PROGRAM, [join(checkout, 'tools'), join(checkout, 'renders', 'hyperreal', 'tweaks')], {
     input: JSON.stringify(payloads),
     what,
     cwd: checkout,
+    timeout,
   });
   return pythonJson(text, what);
 }
@@ -246,11 +249,11 @@ function writeJson(sourceDir, rel, value, written) {
 // Run the checkout's own Python twice: once to learn the schema, then again
 // with the payloads that schema's defaults produce. Finals wider than the
 // preview size are downscaled; the rest are copied. Returns the paths written.
-export async function record(checkout, sourceDir, { downscale } = {}) {
+export async function record(checkout, sourceDir, { downscale, timeout } = {}) {
   const root = resolve(checkout);
-  const learned = ask(root, [], 'reading what the server would answer');
+  const learned = ask(root, [], 'reading what the server would answer', timeout);
   const built = swatchPayloads(learned.schema, learned.types);
-  const recorded = ask(root, built.map(item => item.payload), 'recording the swatches');
+  const recorded = ask(root, built.map(item => item.payload), 'recording the swatches', timeout);
   const preview = recorded.defaults['render.preview_size'];
   const written = [];
   const finals = recorded.finals.map(final => ({ ...final }));

@@ -55,8 +55,10 @@ export async function downscale(png, width, file, options = {}) {
     const height = Math.round(size.height * width / size.width);
     const dataUrl = `data:image/png;base64,${png.toString('base64')}`;
     let url;
+    let timer;
     try {
-      url = await page.evaluate(async ({ dataUrl, width, height }) => {
+      const deadline = options.deadline ?? 30000;
+      const pending = page.evaluate(async ({ dataUrl, width, height }) => {
         const image = new Image();
         image.src = dataUrl;
         await image.decode();
@@ -67,9 +69,26 @@ export async function downscale(png, width, file, options = {}) {
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(image, 0, 0, width, height);
         return canvas.toDataURL('image/png');
-      }, { dataUrl, width, height });
+      }, { dataUrl, width, height }).then(
+        value => ({ ok: true, value }),
+        error => ({ ok: false, error }),
+      );
+      const expired = new Promise(resolve => {
+        timer = setTimeout(() => resolve({ ok: false, timedOut: true }), deadline);
+      });
+      const result = await Promise.race([pending, expired]);
+      if (!result.ok) {
+        if (result.timedOut) {
+          await closeQuietly(() => page.close(), line => console.error(line), 'page');
+          throw named(file, new Error('timed out'));
+        }
+        throw named(file, result.error);
+      }
+      url = result.value;
     } catch (error) {
       throw named(file, error);
+    } finally {
+      clearTimeout(timer);
     }
     return Buffer.from(url.slice(url.indexOf(',') + 1), 'base64');
   } finally {

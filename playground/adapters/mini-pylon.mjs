@@ -38,17 +38,17 @@ export async function read(checkout) {
   const schema = JSON.parse(text);
   const groups = schema.groups.map(g => ({ name: g.name, ...(g.about ? { about: g.about } : {}), controls: g.vars.map(control) }));
 
-  const valueSets = { defaults: valueSet(groups, 'the defaults in tools/scene_params.py', {}) };
+  const valueSets = { defaults: valueSet(groups, 'the defaults in tools/scene_params.py', {}, [], {}) };
   const add = (key, set) => {
     if (Object.hasOwn(valueSets, key)) throw new Error(`mini-pylon: two value sets named ${key}`);
     valueSets[key] = set;
   };
-  for (const [key, preset] of Object.entries(schema.presets ?? {})) add(key, valueSet(groups, preset.about ?? `preset ${key}`, preset.values ?? {}));
+  for (const [key, preset] of Object.entries(schema.presets ?? {})) add(key, valueSet(groups, preset.about ?? `preset ${key}`, preset.values ?? {}, [], preset.values ?? {}));
   const tweaks = join(checkout, 'renders', 'hyperreal', 'tweaks');
   const files = existsSync(tweaks) ? readdirSync(tweaks).filter(f => f.endsWith('.json')).sort() : [];
   for (const file of files) {
     const final = JSON.parse(readFileSync(join(tweaks, file), 'utf8'));
-    add(basename(file, '.json'), valueSet(groups, `final "${final.name}"`, final.values ?? {}));
+    add(basename(file, '.json'), valueSet(groups, `final "${final.name}"`, final.values ?? {}, [], final.values ?? {}));
   }
 
   const untranslated = [

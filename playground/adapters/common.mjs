@@ -34,11 +34,12 @@ export function checkValues(groups, values) {
   return out;
 }
 
-// One value set: { about, values, dropped? }, dropped only when something was.
-export function valueSet(groups, about, values, dropped = []) {
+// One value set: { about, values, sourceValues, dropped? }. sourceValues is
+// the project's own form, unchecked; dropped only when something was.
+export function valueSet(groups, about, values, dropped = [], sourceValues = values) {
   const checked = checkValues(groups, values);
   const all = [...dropped, ...checked.dropped];
-  return { about, values: checked.values, ...(all.length ? { dropped: all } : {}) };
+  return { about, values: checked.values, sourceValues, ...(all.length ? { dropped: all } : {}) };
 }
 
 // capture.json, without shots: capture.mjs adds them when the dev server is up.

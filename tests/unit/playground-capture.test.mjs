@@ -9,7 +9,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, 
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineControls } from '../../src/index.js';
-import { build, checkValues, source } from '../../playground/adapters/common.mjs';
+import { build, checkValues, source, valueSet } from '../../playground/adapters/common.mjs';
 import * as wingsVdb from '../../playground/adapters/wings-vdb.mjs';
 import * as miniPylon from '../../playground/adapters/mini-pylon.mjs';
 
@@ -187,4 +187,26 @@ test('capture.mjs refuses an unknown project', async () => {
 test('npm run playground:capture runs capture.mjs', () => {
   const { scripts } = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'));
   assert.equal(scripts['playground:capture'], 'node playground/capture.mjs');
+});
+
+// The source side starts each project's own page with these, in its own form.
+test('each value set carries the source\'s own values: wings-vdb\'s report as saved, mini-pylon\'s presets and finals as written', async () => {
+  const wings = await wingsVdb.read(join(fixtures, 'wings-vdb'), { reports });
+  assert.deepEqual(wings.valueSets.defaults.sourceValues, {});
+  const report = JSON.parse(readFileSync(join(reports, 'fixture01.json'), 'utf8'));
+  // Old names and all: the page migrates them itself.
+  assert.deepEqual(wings.valueSets.fixture01.sourceValues, JSON.parse(report.storage['wings-vdb:params']));
+  const pylon = await miniPylon.read(join(fixtures, 'mini-pylon'));
+  assert.deepEqual(pylon.valueSets.defaults.sourceValues, {});
+  assert.deepEqual(pylon.valueSets.dusk.sourceValues, {
+    'light.sun_elevation': 4, 'light.sun_strength': 2.5, 'light.sun_warmth': 0.9, 'light.sky_fill': 0.12, 'light.sky_reflect': 0.5, 'light.haze': 4,
+  });
+  const final = JSON.parse(readFileSync(join(fixtures, 'mini-pylon', 'renders', 'hyperreal', 'tweaks', 'help-20261111-173007-2160.json'), 'utf8'));
+  assert.deepEqual(pylon.valueSets['help-20261111-173007-2160'].sourceValues, final.values);
+});
+
+test('valueSet keeps the values it is given as sourceValues unless told otherwise', () => {
+  const groups = [{ name: 'g', controls: [{ key: 'n', type: 'number', value: 1, min: 0, max: 2, step: 0.1 }] }];
+  assert.deepEqual(valueSet(groups, 'a set', { 'g.n': 1.5 }), { about: 'a set', values: { 'g.n': 1.5 }, sourceValues: { 'g.n': 1.5 } });
+  assert.deepEqual(valueSet(groups, 'a set', { 'g.n': 1.5 }, [], { 'old.n': 1.5 }).sourceValues, { 'old.n': 1.5 });
 });

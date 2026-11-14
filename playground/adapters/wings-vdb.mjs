@@ -23,6 +23,22 @@ export const dev = {
   tabs: '.term-tabs .term-tab',
 };
 
+// Copied byte for byte, each under its own path. No font and no
+// public/options/ media is copied.
+export const vendor = [
+  { from: 'index.html', to: 'index.html' },
+  ...['main', 'terminal', 'viz', 'perf', 'params', 'birds', 'cloud-morph', 'shader', 'post', 'detail', 'flags'].map(name => ({ from: `src/${name}.js`, to: `src/${name}.js` })),
+  { from: 'src/style.css', to: 'src/style.css' },
+  { from: 'public/cloud-fallback.svg', to: 'public/cloud-fallback.svg' },
+  { from: 'public/wings-wide.svg', to: 'public/wings-wide.svg' },
+];
+
+// Served in place of the two modules that are not copied.
+export const stubs = [
+  { module: 'src/chat.js', by: 'playground/fixtures/wings-vdb/stubs/chat.js' },
+  { module: 'src/dev-report.js', by: 'playground/fixtures/wings-vdb/stubs/dev-report.js' },
+];
+
 function control(v) {
   const type = v.type ?? 'number';
   const out = { key: v.key, type, value: v.value };

@@ -1,0 +1,8 @@
+/* Stand-in for wings-vdb's src/style.css: its two faces from /fonts/, at the server root. */
+@font-face { font-family: 'ABC Areal'; src: url('/fonts/ABCArealVariable.woff2') format('woff2'); }
+@font-face { font-family: 'ABC Areal Mono'; src: url('/fonts/ABCArealMonoVariable.woff2') format('woff2'); }
+body { margin: 0; font-family: 'ABC Areal', system-ui, sans-serif; }
+.term { position: fixed; right: 0; bottom: 0; width: 520px; background: #fff; display: none; }
+.term.open { display: block; }
+.term-log { font-family: 'ABC Areal Mono', ui-monospace, monospace; }
+.term-tab.active { font-weight: bold; }

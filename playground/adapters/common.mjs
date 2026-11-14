@@ -334,7 +334,14 @@ export async function snapshot(adapter, checkout, sourceDir, { downscale } = {})
   });
   for (const file of files) {
     if (!file.from.endsWith('.js')) continue;
-    for (const { specifier, names } of imports(file.bytes.toString('utf8'))) {
+    let found;
+    try {
+      found = imports(file.bytes.toString('utf8'));
+    } catch (error) {
+      throw new Error(`${name}: ${file.from}: ${error.message}`);
+    }
+    for (const { specifier, names } of found) {
+      if (specifier.startsWith('/')) throw new Error(`${name}: ${file.from} imports ${specifier}, an absolute path; the fixture serves only relative imports`);
       if (!specifier.startsWith('.')) throw new Error(`${name}: ${file.from} imports ${specifier}, a package; the fixture serves no packages`);
       const resolved = posix.normalize(posix.join(posix.dirname(file.from), specifier));
       if (adapter.vendor.some(entry => entry.from === resolved)) continue;

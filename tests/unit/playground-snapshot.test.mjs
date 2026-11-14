@@ -323,3 +323,146 @@ test('capture.mjs after a run that died between its two renames puts the last ca
     assert.deepEqual(listing(join(out, 'mini-pylon')), last);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('wings-vdb: an absolute import names an absolute path, not a package', async () => {
+  const dir = scratch();
+  try {
+    const checkout = copy(dir, 'wings-vdb');
+    appendFileSync(join(checkout, 'src', 'main.js'), "\nimport '/etc/passwd';\n");
+    await assert.rejects(
+      snapshot(wingsVdb, checkout, join(dir, 'source'), { downscale: never }),
+      /wings-vdb: src\/main\.js imports \/etc\/passwd, an absolute path; the fixture serves only relative imports/,
+    );
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('wings-vdb: an import that cannot be read names the project and the file', async () => {
+  const dir = scratch();
+  try {
+    const checkout = copy(dir, 'wings-vdb');
+    appendFileSync(join(checkout, 'src', 'main.js'), '\nimport { a };\n');
+    await assert.rejects(
+      snapshot(wingsVdb, checkout, join(dir, 'source'), { downscale: never }),
+      /wings-vdb: src\/main\.js: import has no specifier/,
+    );
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('wings-vdb: a report that is not JSON names the project and the file', async () => {
+  const dir = scratch();
+  try {
+    const reports = join(dir, 'reports');
+    mkdirSync(reports);
+    writeFileSync(join(reports, 'broken.json'), '{');
+    await assert.rejects(wingsVdb.read(join(fixtures, 'wings-vdb'), { reports }), /wings-vdb: broken\.json:/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('wings-vdb: saved params that are not JSON name the project and the file', async () => {
+  const dir = scratch();
+  try {
+    const reports = join(dir, 'reports');
+    mkdirSync(reports);
+    writeFileSync(join(reports, 'broken.json'), JSON.stringify({ at: 't', storage: { 'wings-vdb:params': '{' } }));
+    await assert.rejects(wingsVdb.read(join(fixtures, 'wings-vdb'), { reports }), /wings-vdb: broken\.json: wings-vdb:params:/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('wings-vdb: a params module that cannot be loaded names the project and the file', async () => {
+  const dir = scratch();
+  try {
+    const checkout = copy(dir, 'wings-vdb');
+    writeFileSync(join(checkout, 'src', 'params.js'), 'this is not javascript\n');
+    await assert.rejects(wingsVdb.read(checkout, { reports: join(dir, 'no-reports') }), /wings-vdb: src\/params\.js:/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('mini-pylon: a Python failure while reading the schema names the step and leaves the program out', async () => {
+  const dir = scratch();
+  try {
+    const checkout = copy(dir, 'mini-pylon');
+    writeFileSync(join(checkout, 'tools', 'scene_params.py'), 'def (\n');
+    await assert.rejects(miniPylon.read(checkout), error => {
+      assert.match(error.message, /^mini-pylon: reading the schema:/);
+      assert.match(error.message, /SyntaxError/);
+      assert.doesNotMatch(error.message, /json\.dumps/);
+      assert.doesNotMatch(error.message, /python3 -B -c/);
+      return true;
+    });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('mini-pylon: a Python failure while recording names the step and leaves the program out', async () => {
+  const dir = scratch();
+  try {
+    const checkout = copy(dir, 'mini-pylon');
+    writeFileSync(join(checkout, 'tools', 'scene_params.py'), 'def (\n');
+    await assert.rejects(miniPylon.record(checkout, join(dir, 'source')), error => {
+      assert.match(error.message, /^mini-pylon: reading what the server would answer:/);
+      assert.match(error.message, /SyntaxError/);
+      assert.doesNotMatch(error.message, /def first_pixel/);
+      assert.doesNotMatch(error.message, /python3 -B -c/);
+      return true;
+    });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('mini-pylon: Python that prints no JSON names the step and the first line', async () => {
+  const dir = scratch();
+  try {
+    const checkout = copy(dir, 'mini-pylon');
+    const file = join(checkout, 'tools', 'scene_params.py');
+    writeFileSync(file, `print("not-json-line")\n${readFileSync(file, 'utf8')}`);
+    await assert.rejects(miniPylon.read(checkout), /mini-pylon: reading the schema: Python printed no JSON: not-json-line/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('mini-pylon: recording that prints no JSON names the step and the first line', async () => {
+  const dir = scratch();
+  try {
+    const checkout = copy(dir, 'mini-pylon');
+    const file = join(checkout, 'tools', 'scene_params.py');
+    writeFileSync(file, `print("not-json-line")\n${readFileSync(file, 'utf8')}`);
+    await assert.rejects(
+      miniPylon.record(checkout, join(dir, 'source')),
+      /mini-pylon: reading what the server would answer: Python printed no JSON: not-json-line/,
+    );
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('mini-pylon: a final that is not JSON names the file', async () => {
+  const dir = scratch();
+  try {
+    const checkout = copy(dir, 'mini-pylon');
+    writeFileSync(join(checkout, 'renders', 'hyperreal', 'tweaks', 'help-20261111-173007-2160.json'), '{');
+    await assert.rejects(
+      miniPylon.read(checkout),
+      /mini-pylon: renders\/hyperreal\/tweaks\/help-20261111-173007-2160\.json:/,
+    );
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('mini-pylon: a final that is not a PNG names the file', async () => {
+  const dir = scratch();
+  try {
+    const checkout = copy(dir, 'mini-pylon');
+    writeFileSync(join(checkout, 'renders', 'hyperreal', 'tweaks', 'help-20261111-173007-2160.png'), Buffer.from('not a png'));
+    await assert.rejects(
+      miniPylon.record(checkout, join(dir, 'source'), { downscale: never }),
+      /mini-pylon: renders\/hyperreal\/tweaks\/help-20261111-173007-2160\.png: not a PNG/,
+    );
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('mini-pylon: a failed downscale names the final', async () => {
+  const dir = scratch();
+  try {
+    const checkout = copy(dir, 'mini-pylon');
+    const wide = encodePng(960, 960, Buffer.alloc(960 * 960 * 3, 0x80));
+    writeFileSync(join(checkout, 'renders', 'hyperreal', 'tweaks', 'help-20261111-173007-2160.png'), wide);
+    await assert.rejects(
+      miniPylon.record(checkout, join(dir, 'source'), { downscale: async () => { throw new Error('decode failed'); } }),
+      /mini-pylon: renders\/hyperreal\/tweaks\/help-20261111-173007-2160\.png: decode failed/,
+    );
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

@@ -6,8 +6,8 @@
 // ({ name, values }), named by its file stem. The snapshot records what the
 // tweak server would answer, by running that same Python.
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { valueSet } from './common.mjs';
 import { pngSize } from '../png.mjs';
@@ -37,7 +37,52 @@ export const stubs = [];
 // Read, never copied. A missing one fails the snapshot before it writes.
 export const inputs = ['tools/tweak_server.py', 'tools/scene_params.py', 'renders/hyperreal/tweaks'];
 
-const SCHEMA = 'import sys, json; sys.path.insert(0, sys.argv[1]); import scene_params; print(json.dumps(scene_params.schema()))';
+const SCHEMA = `
+import sys, json
+sys.path.insert(0, sys.argv[1])
+import scene_params
+print(json.dumps(scene_params.schema()))
+`;
+
+// The program goes in a temp file, never on the command line, so a failure
+// names the step and Python's own stderr instead of the program text.
+function runPython(program, args, { input, what, cwd }) {
+  const dir = mkdtempSync(join(tmpdir(), 'knobs-py-'));
+  try {
+    const file = join(dir, 'run.py');
+    writeFileSync(file, program);
+    try {
+      return execFileSync('python3', ['-B', file, ...args], {
+        cwd,
+        encoding: 'utf8',
+        input,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
+      });
+    } catch (error) {
+      const lines = `${error.stderr ?? ''}`.trim().split(/\r?\n/).filter(line => line.trim() !== '').slice(-20);
+      throw new Error(`mini-pylon: ${what}: ${lines.join('\n') || 'Python failed'}`);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function pythonJson(text, what) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    const first = `${text}`.split(/\r?\n/)[0] ?? '';
+    throw new Error(`mini-pylon: ${what}: Python printed no JSON: ${first}`);
+  }
+}
+
+function explain(error, place) {
+  const message = `${error.message ?? error}`;
+  if (message.startsWith('mini-pylon:')) return error;
+  if (place && message.includes(place)) return new Error(`mini-pylon: ${message}`);
+  return new Error(`mini-pylon: ${place}: ${message}`);
+}
 
 function control(v) {
   const type = v.type === 'choice' ? 'select' : v.type;
@@ -49,10 +94,8 @@ function control(v) {
 }
 
 export async function read(checkout) {
-  const text = execFileSync('python3', ['-B', '-c', SCHEMA, join(checkout, 'tools')], {
-    cwd: checkout, encoding: 'utf8', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
-  });
-  const schema = JSON.parse(text);
+  const text = runPython(SCHEMA, [join(checkout, 'tools')], { what: 'reading the schema', cwd: checkout });
+  const schema = pythonJson(text, 'reading the schema');
   const groups = schema.groups.map(g => ({ name: g.name, ...(g.about ? { about: g.about } : {}), controls: g.vars.map(control) }));
 
   const valueSets = { defaults: valueSet(groups, 'the defaults in tools/scene_params.py', {}, [], {}) };
@@ -64,7 +107,12 @@ export async function read(checkout) {
   const tweaks = join(checkout, 'renders', 'hyperreal', 'tweaks');
   const files = existsSync(tweaks) ? readdirSync(tweaks).filter(f => f.endsWith('.json')).sort() : [];
   for (const file of files) {
-    const final = JSON.parse(readFileSync(join(tweaks, file), 'utf8'));
+    let final;
+    try {
+      final = JSON.parse(readFileSync(join(tweaks, file), 'utf8'));
+    } catch (error) {
+      throw new Error(`mini-pylon: renders/hyperreal/tweaks/${file}: ${error.message}`);
+    }
     add(basename(file, '.json'), valueSet(groups, `final "${final.name}"`, final.values ?? {}, [], final.values ?? {}));
   }
 
@@ -148,14 +196,13 @@ print(json.dumps({
 }))
 `;
 
-function ask(checkout, payloads) {
-  const text = execFileSync('python3', ['-B', '-c', PROGRAM, join(checkout, 'tools'), join(checkout, 'renders', 'hyperreal', 'tweaks')], {
-    cwd: checkout,
-    encoding: 'utf8',
+function ask(checkout, payloads, what) {
+  const text = runPython(PROGRAM, [join(checkout, 'tools'), join(checkout, 'renders', 'hyperreal', 'tweaks')], {
     input: JSON.stringify(payloads),
-    env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
+    what,
+    cwd: checkout,
   });
-  return JSON.parse(text);
+  return pythonJson(text, what);
 }
 
 // The four preview bodies the page would post: every default as JavaScript
@@ -196,9 +243,9 @@ function writeJson(sourceDir, rel, value, written) {
 // preview size are downscaled; the rest are copied. Returns the paths written.
 export async function record(checkout, sourceDir, { downscale } = {}) {
   const root = resolve(checkout);
-  const learned = ask(root, []);
+  const learned = ask(root, [], 'reading what the server would answer');
   const built = swatchPayloads(learned.schema, learned.types);
-  const recorded = ask(root, built.map(item => item.payload));
+  const recorded = ask(root, built.map(item => item.payload), 'recording the swatches');
   const preview = recorded.defaults['render.preview_size'];
   const written = [];
   const finals = recorded.finals.map(final => ({ ...final }));
@@ -206,10 +253,21 @@ export async function record(checkout, sourceDir, { downscale } = {}) {
     if (!final.url) continue;
     if (!/^[\w.-]+\.png$/.test(final.file)) throw new Error(`mini-pylon: a final's file is not a plain PNG name: ${final.file}`);
     const png = readFileSync(join(root, 'renders', 'hyperreal', 'tweaks', final.file));
+    const place = `renders/hyperreal/tweaks/${final.file}`;
+    let size;
+    try {
+      size = pngSize(png);
+    } catch (error) {
+      throw explain(error, place);
+    }
     let bytes = png;
-    if (pngSize(png).width > preview) {
+    if (size.width > preview) {
       if (!downscale) throw new Error(`mini-pylon: ${final.file} is wider than ${preview} px and there is nothing to downscale it with`);
-      bytes = await downscale(png, preview);
+      try {
+        bytes = await downscale(png, preview, place);
+      } catch (error) {
+        throw explain(error, place);
+      }
     }
     const rel = `renders/${final.file}`;
     const dest = join(sourceDir, rel);

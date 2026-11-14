@@ -77,6 +77,24 @@ test('imports: each static, re-exported and dynamic import with the names it tak
     { specifier: './w.js', names: [] },
     { specifier: './late.js', names: [] },
   ]);
+  // A local export ends at its own semicolon and is not a re-export.
+  assert.deepEqual(imports("export { a };\nimport './nope.js';"), [
+    { specifier: './nope.js', names: [] },
+  ]);
+  assert.deepEqual(imports("export {};\nimport { bogus } from './chat.js';"), [
+    { specifier: './chat.js', names: ['bogus'] },
+  ]);
+  // A comment inside a brace list is not a name, and one inside a block is not an import.
+  assert.deepEqual(imports("import {\n  real,\n  // not a name\n  also,\n} from './m.js';"), [
+    { specifier: './m.js', names: ['real', 'also'] },
+  ]);
+  assert.deepEqual(imports("/*\nimport './nope.js';\nimport { a } from './gone.js';\n*/"), []);
+  // A line that only looks like an import is not one, and does not fail the file.
+  assert.deepEqual(imports("import ('./side.js');"), [
+    { specifier: './side.js', names: [] },
+  ]);
+  assert.deepEqual(imports("const s = `\nimport './nope.js';\n`;"), []);
+  assert.doesNotThrow(() => imports("import (\n"));
 });
 
 test('stub: the chat.js stub is a thread that stays empty, with what main.js reads from it', () => {

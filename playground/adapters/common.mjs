@@ -72,48 +72,250 @@ function bindingNames(clause, { defaultBinding = false } = {}) {
   return names;
 }
 
-function readImport(chunk) {
-  const side = chunk.match(/^[ \t]*import\s+(['"])([^'"]+)\1/);
-  if (side) return { specifier: side[2], names: [] };
-  const from = chunk.match(/\bfrom\s+(['"])([^'"]+)\1/);
-  if (!from) throw new Error('import has no specifier');
-  const clause = chunk.slice(chunk.indexOf('import') + 'import'.length, from.index);
-  return { specifier: from[2], names: bindingNames(clause, { defaultBinding: true }) };
+// A statement keyword at `i`, not the word as a prefix of a longer name.
+const STATEMENT = new Set(['import', 'export', 'const', 'let', 'var', 'function', 'class', 'if', 'for', 'while', 'return', 'throw', 'try', 'switch', 'do', 'else']);
+
+function isIdentStart(ch) {
+  return ch !== undefined && /[A-Za-z_$]/.test(ch);
 }
 
-function readExport(chunk) {
-  const from = chunk.match(/\bfrom\s+(['"])([^'"]+)\1/);
-  if (!from) return null;
-  if (/^[ \t]*export\s+\*/.test(chunk)) return { specifier: from[2], names: [] };
-  const brace = chunk.match(/\{([\s\S]*)\}/);
-  const clause = brace ? brace[1] : '';
-  return { specifier: from[2], names: bindingNames(`{${clause}}`) };
+function isIdentChar(ch) {
+  return ch !== undefined && /[A-Za-z0-9_$]/.test(ch);
 }
 
-// Static imports whose line starts with `import`, then `export … from`,
-// then dynamic `import('…')`. A comment and `import.meta` are not imports.
-export function imports(text) {
-  const statics = [];
-  const reexports = [];
-  const lines = text.split('\n');
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (/^[ \t]*import\s/.test(line)) {
-      let chunk = line;
-      if (!/^[ \t]*import\s+['"]/.test(line)) {
-        while (!/\bfrom\s+['"][^'"]+['"]/.test(chunk) && i + 1 < lines.length) chunk += `\n${lines[++i]}`;
-      }
-      statics.push(readImport(chunk));
+function keywordAt(code, i, word) {
+  if (!code.startsWith(word, i)) return false;
+  if (isIdentChar(code[i - 1]) || isIdentChar(code[i + word.length])) return false;
+  return true;
+}
+
+function skipSpaces(code, i) {
+  while (code[i] === ' ' || code[i] === '\t') i++;
+  return i;
+}
+
+function skipWhitespace(code, i) {
+  while (code[i] === ' ' || code[i] === '\t' || code[i] === '\n') i++;
+  return i;
+}
+
+function readWord(code, i) {
+  let j = i + 1;
+  while (isIdentChar(code[j])) j++;
+  return code.slice(i, j);
+}
+
+function nextLine(code, i) {
+  const nl = code.indexOf('\n', i);
+  return nl === -1 ? code.length : nl + 1;
+}
+
+// Comments, string contents and template contents become spaces, so a match
+// never sees them. Quote marks stay, and the specifier text is read from
+// the original at the same index. `${…}` is code again.
+function maskNonCode(text) {
+  let out = '';
+  let i = 0;
+  let mode = 'code';
+  const exprDepth = [];
+  const blank = () => { out += text[i] === '\n' ? '\n' : ' '; i++; };
+  const keep = () => { out += text[i]; i++; };
+  while (i < text.length) {
+    const c = text[i];
+    const n = text[i + 1];
+    if (mode === 'line') {
+      if (c === '\n') { keep(); mode = 'code'; } else blank();
       continue;
     }
-    if (/^[ \t]*export\s+(\*|\{)/.test(line)) {
-      let chunk = line;
-      while (!/\bfrom\s+['"][^'"]+['"]/.test(chunk) && i + 1 < lines.length) chunk += `\n${lines[++i]}`;
-      const read = readExport(chunk);
-      if (read) reexports.push(read);
+    if (mode === 'block') {
+      if (c === '*' && n === '/') { blank(); blank(); mode = 'code'; continue; }
+      blank();
+      continue;
+    }
+    if (mode === 's' || mode === 'd') {
+      const q = mode === 's' ? "'" : '"';
+      if (c === '\\') { blank(); if (i < text.length) blank(); continue; }
+      if (c === q) { keep(); mode = 'code'; continue; }
+      blank();
+      continue;
+    }
+    if (mode === 't') {
+      if (c === '\\') { blank(); if (i < text.length) blank(); continue; }
+      if (c === '`') { keep(); mode = 'code'; continue; }
+      if (c === '$' && n === '{') { blank(); blank(); mode = 'code'; exprDepth.push(0); continue; }
+      blank();
+      continue;
+    }
+    if (exprDepth.length && c === '{') { exprDepth[exprDepth.length - 1]++; keep(); continue; }
+    if (exprDepth.length && c === '}') {
+      if (exprDepth[exprDepth.length - 1] === 0) { exprDepth.pop(); blank(); mode = 't'; continue; }
+      exprDepth[exprDepth.length - 1]--;
+      keep();
+      continue;
+    }
+    if (c === '/' && n === '/') { blank(); blank(); mode = 'line'; continue; }
+    if (c === '/' && n === '*') { blank(); blank(); mode = 'block'; continue; }
+    if (c === "'") { keep(); mode = 's'; continue; }
+    if (c === '"') { keep(); mode = 'd'; continue; }
+    if (c === '`') { keep(); mode = 't'; continue; }
+    keep();
+  }
+  return out;
+}
+
+function readQuoted(text, i) {
+  const q = text[i];
+  if (q !== "'" && q !== '"') return null;
+  let j = i + 1;
+  let value = '';
+  while (j < text.length && text[j] !== q && text[j] !== '\n') {
+    if (text[j] === '\\' && j + 1 < text.length) { value += text[j + 1]; j += 2; continue; }
+    value += text[j];
+    j++;
+  }
+  if (text[j] !== q) return null;
+  return { value, end: j + 1 };
+}
+
+// A static import, or null when the line only starts with the word.
+// The statement ends at its specifier or at `;`, and never takes the next one.
+function readStaticImport(code, text, i) {
+  const after = i + 'import'.length;
+  const k = skipWhitespace(code, after);
+  const ch = code[k];
+  if (ch === undefined || ch === '(' || ch === '.' || ch === ';') return { item: null, end: after };
+  if (ch === "'" || ch === '"') {
+    const spec = readQuoted(text, k);
+    if (!spec) throw new Error('import has no specifier');
+    let end = spec.end;
+    if (code[end] === ';') end++;
+    return { item: { specifier: spec.value, names: [] }, end };
+  }
+  if (ch !== '{' && ch !== '*' && !isIdentStart(ch)) return { item: null, end: after };
+  let depth = 0;
+  let sawBinding = false;
+  let j = after;
+  while (j < code.length) {
+    const c = code[j];
+    if (c === '{') { depth++; sawBinding = true; j++; continue; }
+    if (c === '}') { depth = Math.max(0, depth - 1); j++; continue; }
+    if (depth === 0 && c === '*') { sawBinding = true; j++; continue; }
+    if (depth === 0 && isIdentStart(c)) {
+      const word = readWord(code, j);
+      if (word === 'from') {
+        const spec = readQuoted(text, skipWhitespace(code, j + 4));
+        if (!spec) throw new Error('import has no specifier');
+        let end = spec.end;
+        if (code[end] === ';') end++;
+        const clause = code.slice(after, j);
+        return { item: { specifier: spec.value, names: bindingNames(clause, { defaultBinding: true }) }, end };
+      }
+      sawBinding = true;
+      j += word.length;
+      continue;
+    }
+    if (depth === 0 && (c === ';' || c === '\n')) {
+      const stops = c === ';' || statementAt(code, skipWhitespace(code, j + 1));
+      if (stops) {
+        if (sawBinding) throw new Error('import has no specifier');
+        return { item: null, end: c === ';' ? j + 1 : after };
+      }
+    }
+    j++;
+  }
+  if (sawBinding) throw new Error('import has no specifier');
+  return { item: null, end: after };
+}
+
+function statementAt(code, i) {
+  if (i >= code.length) return true;
+  for (const word of STATEMENT) if (keywordAt(code, i, word)) return true;
+  return false;
+}
+
+// `export { … } from` and `export * from` only. A local `export { … };`
+// ends at `;` and contributes nothing.
+function readReexport(code, text, i) {
+  const k = skipWhitespace(code, i + 'export'.length);
+  if (code[k] === '*') return readExportStar(code, text, k);
+  if (code[k] === '{') return readExportList(code, text, k);
+  return null;
+}
+
+function readExportStar(code, text, starAt) {
+  let k = skipWhitespace(code, starAt + 1);
+  if (keywordAt(code, k, 'as')) {
+    k = skipWhitespace(code, k + 2);
+    while (isIdentChar(code[k])) k++;
+    k = skipWhitespace(code, k);
+  }
+  if (!keywordAt(code, k, 'from')) return { item: null, end: starAt + 1 };
+  const spec = readQuoted(text, skipWhitespace(code, k + 4));
+  if (!spec) return { item: null, end: starAt + 1 };
+  let end = spec.end;
+  if (code[end] === ';') end++;
+  return { item: { specifier: spec.value, names: [] }, end };
+}
+
+function readExportList(code, text, braceAt) {
+  let depth = 0;
+  let close = -1;
+  for (let j = braceAt; j < code.length; j++) {
+    if (code[j] === '{') depth++;
+    else if (code[j] === '}') {
+      depth--;
+      if (depth === 0) { close = j; break; }
     }
   }
-  const dynamic = [...text.matchAll(/\bimport\s*\(\s*(['"])([^'"]+)\1\s*\)/g)].map(match => ({ specifier: match[2], names: [] }));
+  if (close === -1) return { item: null, end: code.length };
+  const after = skipWhitespace(code, close + 1);
+  if (keywordAt(code, after, 'from')) {
+    const spec = readQuoted(text, skipWhitespace(code, after + 4));
+    if (spec) {
+      let end = spec.end;
+      if (code[end] === ';') end++;
+      return { item: { specifier: spec.value, names: bindingNames(code.slice(braceAt, close + 1)) }, end };
+    }
+  }
+  let end = close + 1;
+  while (code[end] === ' ' || code[end] === '\t') end++;
+  if (code[end] === ';') end++;
+  return { item: null, end };
+}
+
+// Static imports whose statement starts with `import`, then `export … from`,
+// then dynamic `import(…)`. Comments, strings and template text are not code,
+// and each statement ends at its own specifier or `;`.
+export function imports(text) {
+  const code = maskNonCode(text);
+  const statics = [];
+  const reexports = [];
+  let i = 0;
+  while (i < code.length) {
+    const line = i === 0 || code[i - 1] === '\n';
+    if (!line) { i++; continue; }
+    const j = skipSpaces(code, i);
+    if (keywordAt(code, j, 'import')) {
+      const read = readStaticImport(code, text, j);
+      if (read.item) statics.push(read.item);
+      i = nextLine(code, read.end);
+      continue;
+    }
+    if (keywordAt(code, j, 'export')) {
+      const read = readReexport(code, text, j);
+      if (read) {
+        if (read.item) reexports.push(read.item);
+        i = nextLine(code, read.end);
+        continue;
+      }
+    }
+    i = nextLine(code, i);
+  }
+  const dynamic = [];
+  for (const match of text.matchAll(/\bimport\s*\(\s*(['"])([^'"]+)\1\s*\)/g)) {
+    if (code[match.index] !== 'i') continue;
+    dynamic.push({ specifier: match[2], names: [] });
+  }
   return [...statics, ...reexports, ...dynamic];
 }
 

@@ -3,3 +3,4 @@ tests/.tmp/
 .worktrees/
 playground/.shots/
 playground/drafts/
+playground/captures/.*/

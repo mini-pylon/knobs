@@ -3,6 +3,7 @@
 // so a test can make one throw.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -132,4 +133,18 @@ test('recover restores the newest old folder and removes the rest', async () => 
   } finally {
     rmSync(out, { recursive: true, force: true });
   }
+});
+
+test('a dead run\'s dot folders under captures are ignored, and a capture is not', () => {
+  const ignored = execFileSync('git', ['check-ignore', '-v', '--', 'playground/captures/.p-old-dead/', 'playground/captures/.p-new-dead/'], { encoding: 'utf8' });
+  assert.match(ignored, /playground\/captures\/\.\*\//);
+  assert.equal(ignored.trim().split('\n').length, 2);
+  let tracked = false;
+  try {
+    execFileSync('git', ['check-ignore', '-q', '--', 'playground/captures/wings-vdb'], { encoding: 'utf8' });
+    tracked = true;
+  } catch (error) {
+    assert.equal(error.status, 1);
+  }
+  assert.equal(tracked, false);
 });

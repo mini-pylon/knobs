@@ -73,8 +73,67 @@ export async function downscale(png, width, file, options = {}) {
     }
     return Buffer.from(url.slice(url.indexOf(',') + 1), 'base64');
   } finally {
-    await page.close();
+    await closeQuietly(() => page.close(), line => console.error(line), 'page');
   }
+}
+
+// A close that rejects is a warning. It must not replace the error already
+// in flight, and it must not decide the exit code.
+async function closeQuietly(closer, warn, what = 'browser') {
+  try {
+    await closer();
+  } catch (error) {
+    warn(`capture: could not close the ${what}: ${error.message ?? error}`);
+  }
+}
+
+// Prints the capture's outcome, then cleans up. A cleanup failure is another
+// line, never a replacement for that outcome. The exit code is 1 only when
+// the capture was not published.
+export async function unwindCapture({
+  error = null,
+  published = false,
+  aside = null,
+  dest = null,
+  partial = null,
+  browser = null,
+  fs = { existsSync, renameSync, rmSync },
+  warn = line => console.error(line),
+} = {}) {
+  if (!published && error) {
+    warn(`capture failed: ${error.message}`);
+    if (aside && dest) {
+      let missing = false;
+      try {
+        missing = !fs.existsSync(dest);
+      } catch (checkError) {
+        warn(`capture: could not put the last capture back: ${checkError.message}`);
+      }
+      if (missing) {
+        try {
+          fs.renameSync(aside, dest);
+        } catch (renameError) {
+          warn(`capture: could not put the last capture back: ${renameError.message}`);
+        }
+      }
+    }
+    if (partial) {
+      try {
+        fs.rmSync(partial, { recursive: true, force: true });
+      } catch (rmError) {
+        warn(`capture: could not remove ${partial}: ${rmError.message}`);
+      }
+    }
+  }
+  if (browser) await closeQuietly(() => browser.close(), warn);
+  if (published && aside) {
+    try {
+      fs.rmSync(aside, { recursive: true, force: true });
+    } catch (rmError) {
+      warn(`capture: could not remove ${aside}: ${rmError.message}; the next capture removes it`);
+    }
+  }
+  return published || !error ? 0 : 1;
 }
 
 function invokedDirectly() {
@@ -124,7 +183,9 @@ async function main() {
         shots.push({ tab: labels[i], file });
       }
       return shots;
-    } finally { await shotBrowser.close(); }
+    } finally {
+      await closeQuietly(() => shotBrowser.close(), line => console.error(line));
+    }
   }
 
   const out = resolve(values.out);
@@ -132,6 +193,7 @@ async function main() {
   let partial = null;
   let aside = null;
   let published = false;
+  let failed = null;
   try {
     mkdirSync(out, { recursive: true });
     // A run that died after moving the last capture aside left it as .<project>-old-….
@@ -162,20 +224,10 @@ async function main() {
     for (const shot of capture.shots) console.log(join(dest, shot.file));
     if (capture.shotsSkipped) console.log(`no shots: ${capture.shotsSkipped}`);
   } catch (error) {
-    if (aside && !existsSync(dest)) renameSync(aside, dest);
-    if (partial) rmSync(partial, { recursive: true, force: true });
-    console.error(`capture failed: ${error.message}`);
-    process.exitCode = 1;
-  } finally {
-    if (browser) await browser.close();
+    failed = error;
   }
-  if (published && aside) {
-    try {
-      rmSync(aside, { recursive: true, force: true });
-    } catch (error) {
-      console.error(`capture: could not remove ${aside}: ${error.message}; the next capture removes it`);
-    }
-  }
+  const code = await unwindCapture({ error: failed, published, aside, dest, partial, browser });
+  if (code) process.exitCode = code;
 }
 
 if (invokedDirectly()) {

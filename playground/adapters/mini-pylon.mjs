@@ -64,7 +64,12 @@ function runPython(program, args, { input, what, cwd }) {
       throw new Error(`mini-pylon: ${what}: ${lines.join('\n') || 'Python failed'}`);
     }
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    // Removing the temp program must not replace Python's result or its error.
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch (error) {
+      console.error(`mini-pylon: could not remove ${dir}: ${error.message}`);
+    }
   }
 }
 

@@ -58,16 +58,16 @@ Where the spec was silent or wrong, this plan decided:
 7. **The switch maps tabs.** A visible group stays; the console tab becomes the other side's (`wings-vdb` and `knobs-wings-vdb`); any other tab (`perf`, `performance`, `renders`) is dropped, so the other side opens on its default.
 8. **The fonts folder is not in `capture.json`.** `capture.json` is public, so it records no local path. The fonts route reads `KNOBS_WINGS_FONTS` when set, else `public/fonts/` of the wings-vdb adapter's default checkout (`playground/adapters/wings-vdb.mjs:15` at `acb38aa`). `servePlayground` takes a `fonts` option over both, and every test passes its own.
 9. **Snapshots are mounted when the server starts.** A capture made while the playground runs shows after a restart (README). A project with no snapshot answers 404 under its prefix, naming the capture command, instead of falling through to the playground's own pages.
-10. **Capture publishes atomically.** It builds into `<out>/.<project>-<random>`, which the playground's globs skip (Vite's `import.meta.glob` leaves dot folders out unless `exhaustive`; checked: `node_modules/vite/dist/node/chunks/node.js:27726`, vite 8.3.8, 2026-11-13), then moves the last capture aside to `<out>/.<project>-old-<random>`, renames the new one into place, and removes the old one. A failed capture leaves the last one as it was. A run that died between the two renames left no `<project>` folder and the last capture aside: the next run renames it back before anything else.
+10. **Capture publishes atomically.** It builds into `<out>/.<project>-<random>`, which the playground's globs skip (Vite's `import.meta.glob` leaves dot folders out unless `exhaustive`; checked: `node_modules/vite/dist/node/chunks/node.js:27726`, vite 8.3.8, 2026-11-13), then moves the last capture aside to `<out>/.<project>-old-<random>`, renames the new one into place, and removes the old one. A failed capture leaves the last one as it was. A failure between the two renames renames the last one back at once; a run that died there left no `<project>` folder and the last capture aside, and the next run renames it back before anything else. A failure to remove the old folder after the new one is in place is not a failed capture.
 11. **Only a render wider than the preview size is downscaled;** a smaller one (the stand-in's 2×2 render) is copied as it is. Chromium is launched for it only when needed.
 12. **Grid capture rows** are the capture's visible groups. Their cells default to 960×600, since wings-vdb hides its pictures below 761 px (checked: a `matchMedia` query with a 761 px minimum width in wings-vdb src/terminal.js line 84 at 7f92902, 2026-11-13). `set=all` keeps one knobs cell per capture, as now.
 13. **check-fixtures reads the pictures' pixels in the page.** wings-vdb's pictures are 2D canvases (checked: `getContext` for a 2D context in wings-vdb src/viz.js lines 97 and 112 at 7f92902, 2026-11-13). On 2026-11-13 a Playwright screenshot of the live WebGL page stalled past 20 s with the Vulkan flags, on the fixture and on wings-vdb's own dev server alike, so the check takes no screenshot. It also skips a hidden canvas: wings-vdb keeps the last picture, hidden, on a tab without one.
 14. **Tests are split by task**, so each task's tests import only what exists by then: unit tests in `playground-capture` (extended), `playground-snapshot`, `playground-python`, `playground-standin`, `playground-source-side`, `playground-routes` and `playground-notice`; browser tests in `capture-downscale`, `source-serve`, `source-shell` and `check-fixtures`, with `playground.test.mjs` changed where the spec names. The spec named two unit files and one browser file.
-15. **The stand-in's edges:** a method other than GET or POST answers 405, `values` that is not an object 400, a body over 1 MB is refused; job ids are `<n>-fixture`; a final's job keeps the size it was asked for. `GET /captures/wings-vdb/fonts` doubles as the same-origin page shots and check-fixtures load to write a seed before opening a source page.
+15. **The stand-in's edges:** a method other than GET, HEAD or POST answers 405 (the server itself answers HEAD with 501, having no `do_HEAD`; the stand-in answers HEAD as GET, like the playground's own Vite server it sits in), `values` that is not an object 400, a body over 1 MB is refused; job ids are `<n>-fixture`; a final's job keeps the size it was asked for. `GET /captures/wings-vdb/fonts` doubles as the same-origin page shots and check-fixtures load to write a seed before opening a source page.
 16. **The stubs are resolved by path,** by a `resolveId` plugin that maps the resolved `src/chat.js` and `src/dev-report.js` to the stubs whichever module imports them, not by a string alias on `./chat.js`.
 17. **The stand-in wings-vdb checkout runs.** Its `src/main.js` and `src/terminal.js` become small working stand-ins that keep the lines the adapter reads (the four commands, `HIDDEN_TABS`, the slash actions), so the existing adapter tests hold. `lib/captures.mjs` gives it a second shot (tab `dispersal`), so the grid's shot cell is tested; the capture-view test reads the first.
 18. **The real snapshots are committed in Milestone 4**, after check-fixtures passes on them. The spec's sizes were estimates: the reference made 408 KB for wings-vdb and 796 KB for mini-pylon (two 480 px renders of about 360 KB each).
-- Checked 2026-11-14 at acb38aa: 37 apply blocks, 16 reds as quoted, 6 probes pass, 19 code citations, 12 checked, 0 unchecked.
+- Checked 2026-11-14 at acb38aa: 38 apply blocks, 16 reds as quoted, 6 probes pass, 20 code citations, 12 checked, 0 unchecked.
 
 ## Review Focus
 
@@ -1218,7 +1218,7 @@ node --test --test-name-pattern='^capture\.mjs ' tests/unit/playground-snapshot.
 /playground/png.mjs' imported from
 ```
 
-**At this task** the file loads, and the three `capture.mjs ` tests fail on their assertions: the capture of the base writes no `source/` or `vendored`, exits 0 on the checkout without `tools/tweak_server.py`, and leaves the dead runs' folders.
+**At this task** the file loads, and the three `capture.mjs ` tests fail: the capture of the base writes no `vendored` (the first test throws reading its keys), and it exits 0 on the checkout without `tools/tweak_server.py` (the second and third fail on `notEqual(bad.code, 0)`).
 
 ```bash red
 node --test --test-concurrency=1 --test-timeout=60000 tests/browser/capture-downscale.test.mjs
@@ -1228,14 +1228,15 @@ node --test --test-concurrency=1 --test-timeout=60000 tests/browser/capture-down
 /playground/png.mjs' imported from
 ```
 
-**At this task** the file loads, and its one test fails on its assertions: the capture of the base downscales nothing.
+**At this task** the file loads, and its one test fails with `ENOENT` reading `source/renders/help-20261111-173007-2160.png`: the capture of the base writes no `source/`.
 
 **Implementation.** In `playground/capture.mjs` (`playground/capture.mjs:64-73` at `acb38aa` builds, removes the folder, then writes):
 
 1. Make `out` (resolved) if needed. When `<out>/<project>` is missing and a folder named `.<project>-old-…` is there, a run died between its two renames (step 3): rename the newest such folder (by mtime) back to `<out>/<project>`. Then remove every entry of `out` whose name starts with `.<project>-`: what a run that died left behind.
 2. Make a folder with `mkdtempSync(join(out, '.<project>-new-'))` (decision 10).
-3. In a `try`: `build()` as now; `capture.vendored = await snapshot(adapter, checkout, join(partial, 'source'), { downscale })`; shots as now, but into the partial folder; write `capture.json` there. Then, when `<out>/<project>` exists, rename it to `<out>/.<project>-old-<8 random hex digits>`; rename the partial folder to `<out>/<project>`; and remove the old one. Print the `capture.json` path, the `source` path, each shot and the `no shots` line, as now.
-4. On any error: remove the partial folder, print `capture failed: <message>` on stderr, and set the exit code to 1. The last capture is untouched.
+3. In a `try`: `build()` as now; `capture.vendored = await snapshot(adapter, checkout, join(partial, 'source'), { downscale })`; shots as now, but into the partial folder; write `capture.json` there. Then, when `<out>/<project>` exists, rename it to `<out>/.<project>-old-<8 random hex digits>`; rename the partial folder to `<out>/<project>`. The capture is now published. Print the `capture.json` path, the `source` path, each shot and the `no shots` line, as now.
+4. On any error before it is published: if this run moved the last capture aside and `<out>/<project>` is missing, rename it back; remove the partial folder; print `capture failed: <message>` on stderr, and set the exit code to 1. The last capture is back as it was.
+   After the `try`, once published, remove the folder moved aside; if that throws, print `capture: could not remove <path>: <message>; the next capture removes it` on stderr and keep exit code 0, since the new capture is in place.
 5. `downscale(png, width)`: launch Chromium on first use only (`chromium.launch` with `KNOBS_CHROMIUM` as the shots do, no extra arguments), open a page, load the PNG as a data URL into an `Image`, wait for `decode()`, draw it on a canvas of that width and the height in proportion with `imageSmoothingQuality = 'high'`, and return the canvas's PNG (`toDataURL`) as a Buffer. Close the page each time, and the browser in a `finally` around the whole run.
 6. Update the header comment: `source/`, `vendored`, and the folder moved into place only once complete.
 
@@ -1537,7 +1538,7 @@ node --test tests/unit/playground-standin.test.mjs
    - A preview: when the resolved scene values (without `render.*`) equal, path by path and number by value, a recorded final's values resolved the same way, its `url` is that final's `url`; otherwise its `url` is `${PREFIX}/out/previews/preview-<id>.png` and the swatch of the scene values at that size is kept in memory under that path. Its end state is `done`.
    - A final keeps the size it was asked for (1080 when none) with 160 samples, and ends `failed` with `error` `FINALS_REFUSED` and no `url`.
    - A job is answered with exactly the fields `id, kind, state, size, samples, url, seconds, error, name, ahead`, in that order. Keep the newest 100 jobs and the newest 40 swatches.
-5. `files`, GET or HEAD only (else 405): `/` and `/index.html` answer `index.html`, `/tweak.js` and `/tweak.css` their files, each with its content type and `cache-control: no-store`; a swatch kept in memory answers by its path; `/renders/<name>.png` answers that file when the name matches `/^[\w.-]+\.png$/` and the file is in `renders/`; both PNGs as `image/png` with `cache-control: max-age=86400`, as the server sends its page files and its `/out/` PNGs (`file` and `do_GET` in `tools/tweak_server.py` lines 288-312 at b984b47, checked 2026-11-14); anything else is 404.
+5. `files`, GET or HEAD only (else 405): `/` and `/index.html` answer `index.html`, `/tweak.js` and `/tweak.css` their files, each with its content type and `cache-control: no-store`; a swatch kept in memory answers by its path; `/renders/<name>.png` answers that file when the name matches `/^[\w.-]+\.png$/` and the file is in `renders/`; both PNGs as `image/png` with `cache-control: max-age=86400`, as the server sends its `/out/` PNGs, while its page files and JSON are `no-store` (`send`, `file` and `do_GET` in `tools/tweak_server.py` lines 278-312 at b984b47, checked 2026-11-14); anything else is 404.
 
 **Checks.** The red command gives 10 pass.
 
@@ -1694,7 +1695,7 @@ node --test tests/unit/playground-source-side.test.mjs
 
 ### Task 8: the playground serves the source fixtures
 
-**Files:** create `playground/fixtures/routes.mjs`, `playground/fixtures/wings-vdb/vite.mjs`, `tests/unit/playground-routes.test.mjs` and `tests/browser/source-serve.test.mjs`; edit `playground/server.mjs`.
+**Files:** create `playground/fixtures/routes.mjs`, `playground/fixtures/wings-vdb/vite.mjs`, `tests/unit/playground-routes.test.mjs` and `tests/browser/source-serve.test.mjs`; edit `playground/server.mjs` and `tests/browser/playground.test.mjs`.
 
 **Interfaces.**
 
@@ -1990,6 +1991,40 @@ test('nothing a source page does writes under the captures folder', () => {
 PLAN_EOF
 ```
 
+The servers and child processes `playground.test.mjs` starts get a fonts folder of the test's own from this task on, since this task's server reads `public/fonts/` of the real wings-vdb checkout when given none, and both shots tests start `shots.mjs` with the test's own captures, drafts and fonts:
+
+```bash apply
+python3 - <<'PLAN_EOF'
+# Edits tests/browser/playground.test.mjs: each old text must be there exactly once.
+path = 'tests/browser/playground.test.mjs'
+text = open(path, encoding='utf-8').read()
+edits = [
+    (r'''const captures = mkdtempSync(join(repo, 'tests', '.tmp', 'captures-'));
+const captureFixtures = join(repo, 'tests', 'fixtures', 'captures');
+''',
+     r'''const captures = mkdtempSync(join(repo, 'tests', '.tmp', 'captures-'));
+// The fonts folder is the test's own and empty.
+const fonts = mkdtempSync(join(repo, 'tests', '.tmp', 'fonts-'));
+const captureFixtures = join(repo, 'tests', 'fixtures', 'captures');
+'''),
+    (r'''  site = await servePlayground({ drafts, captures, logLevel: 'error' });''',
+     r'''  site = await servePlayground({ drafts, captures, fonts, logLevel: 'error' });'''),
+    (r'''after(() => closeAll(() => browser?.close(), () => site?.close(), () => rmSync(drafts, { recursive: true, force: true }), () => rmSync(captures, { recursive: true, force: true })));''',
+     r'''after(() => closeAll(() => browser?.close(), () => site?.close(), ...[drafts, captures, fonts].map(dir => () => rmSync(dir, { recursive: true, force: true }))));'''),
+    (r'''  const proxied = await servePlayground({ drafts: proxiedDrafts, captures, logLevel: 'error', allowedHosts: ['knobs.example.test'] });''',
+     r'''  const proxied = await servePlayground({ drafts: proxiedDrafts, captures, fonts, logLevel: 'error', allowedHosts: ['knobs.example.test'] });'''),
+    (r'''      { timeout: 120000, env: { ...process.env, KNOBS_CAPTURES: captures, KNOBS_DRAFTS: drafts } },''',
+     r'''      { timeout: 120000, env: { ...process.env, KNOBS_CAPTURES: captures, KNOBS_DRAFTS: drafts, KNOBS_WINGS_FONTS: fonts } },'''),
+    (r'''      { timeout: 90000 }, (error''',
+     r'''      { timeout: 90000, env: { ...process.env, KNOBS_CAPTURES: captures, KNOBS_DRAFTS: drafts, KNOBS_WINGS_FONTS: fonts } }, (error'''),
+]
+for old, new in edits:
+    assert text.count(old) == 1, f'{path}: expected once: {old[:70]!r}'
+    text = text.replace(old, new)
+open(path, 'w', encoding='utf-8').write(text)
+PLAN_EOF
+```
+
 ```bash red
 node --test tests/unit/playground-routes.test.mjs
 ```
@@ -2018,15 +2053,15 @@ node --test --test-concurrency=1 --test-timeout=60000 tests/browser/source-serve
    - Its `closeServer` hook closes the wings-vdb fixture, if one was made.
 5. `servePlayground`: the fonts folder is `fonts`, else `KNOBS_WINGS_FONTS`, else `public/fonts` of the wings-vdb adapter's `defaultCheckout` (decision 8), resolved; add `fixturesPlugin({ captures: capturesDir, fonts: fontsDir, allowedHosts, logLevel })` after the two plugins it has (`playground/server.mjs:83-95` at `acb38aa`); return `{ ...site, captures: capturesDir }`. Its callers already `await` it (`playground/serve.mjs:13`, `playground/shots.mjs:24` at `acb38aa`). Update its header comment with the source fixtures and `KNOBS_WINGS_FONTS`.
 
-**Checks.** Both reds pass (3 unit; 9 browser as a check job). `playground.test.mjs` still passes (a check job with `--test-name-pattern='proxy|capture'`). Milestone 2 ends: `npm run test:unit` gives 281 pass, and `npm run test:browser` (check job) 205 pass.
+**Checks.** Both reds pass (3 unit; 9 browser as a check job). `playground.test.mjs` still passes (a check job with `--test-name-pattern='proxy|capture|playground:shots'`). Milestone 2 ends: `npm run test:unit` gives 282 pass, and `npm run test:browser` (check job) 205 pass.
 
-**Commit.** `feat(playground): serve each captured project's own page beside its knobs translation`, staging the five files.
+**Commit.** `feat(playground): serve each captured project's own page beside its knobs translation`, staging the six files.
 
 ### Task 9: the knobs translation of a capture is named knobs-<project>
 
 **Files:** edit `playground/stage.js` and `tests/browser/playground.test.mjs`.
 
-The test changes: the captures come from `lib/captures.mjs` with their snapshots and a fonts folder of the test's own; the capture's drawer is titled `knobs-wings-vdb`; the capture view has two shots; and both shots tests start `shots.mjs` with the test's own captures, drafts and fonts, since from Task 8 its server mounts whatever captures folder it is given:
+The test changes: the captures come from `lib/captures.mjs` with their snapshots (the fonts folder is Task 8's); the capture's drawer is titled `knobs-wings-vdb`; the capture view has two shots:
 
 ```bash apply
 python3 - <<'PLAN_EOF'
@@ -2043,6 +2078,8 @@ import * as wingsVdb from '../../playground/adapters/wings-vdb.mjs';
     (r'''// A captures folder of the test's own, built from the fixture copies of both
 // projects; wings-vdb's has one shot of its drawer.
 const captures = mkdtempSync(join(repo, 'tests', '.tmp', 'captures-'));
+// The fonts folder is the test's own and empty.
+const fonts = mkdtempSync(join(repo, 'tests', '.tmp', 'fonts-'));
 const captureFixtures = join(repo, 'tests', 'fixtures', 'captures');
 // A 1x1 PNG.
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
@@ -2061,7 +2098,7 @@ async function writeCaptures() {
 let site, browser;
 before(async () => {
   await writeCaptures();
-  site = await servePlayground({ drafts, captures, logLevel: 'error' });
+  site = await servePlayground({ drafts, captures, fonts, logLevel: 'error' });
 ''',
      r'''// A captures folder of the test's own, built from the stand-in checkouts of
 // both projects with their source snapshots (lib/captures.mjs); wings-vdb's
@@ -2074,10 +2111,6 @@ before(async () => {
   await writeCaptures(captures);
   site = await servePlayground({ drafts, captures, fonts, logLevel: 'error' });
 '''),
-    (r'''after(() => closeAll(() => browser?.close(), () => site?.close(), () => rmSync(drafts, { recursive: true, force: true }), () => rmSync(captures, { recursive: true, force: true })));''',
-     r'''after(() => closeAll(() => browser?.close(), () => site?.close(), ...[drafts, captures, fonts].map(dir => () => rmSync(dir, { recursive: true, force: true }))));'''),
-    (r'''  const proxied = await servePlayground({ drafts: proxiedDrafts, captures, logLevel: 'error', allowedHosts: ['knobs.example.test'] });''',
-     r'''  const proxied = await servePlayground({ drafts: proxiedDrafts, captures, fonts, logLevel: 'error', allowedHosts: ['knobs.example.test'] });'''),
     (r'''test('the stage mounts a capture titled with its project, its hidden groups without tabs', async () => {
   const { page, errors } = await stage('s=capture:wings-vdb');
   try {
@@ -2098,10 +2131,6 @@ before(async () => {
     await shot.waitFor();
     assert.ok(await shot.evaluate(img => img.complete && img.naturalWidth === 1), 'the shot loads');
     assert.deepEqual(await capture.locator('figure.shot figcaption').allInnerTexts(), ['wings-vdb', 'dispersal']);'''),
-    (r'''      { timeout: 120000, env: { ...process.env, KNOBS_CAPTURES: captures, KNOBS_DRAFTS: drafts } },''',
-     r'''      { timeout: 120000, env: { ...process.env, KNOBS_CAPTURES: captures, KNOBS_DRAFTS: drafts, KNOBS_WINGS_FONTS: fonts } },'''),
-    (r'''      { timeout: 90000 }, (error''',
-     r'''      { timeout: 90000, env: { ...process.env, KNOBS_CAPTURES: captures, KNOBS_DRAFTS: drafts, KNOBS_WINGS_FONTS: fonts } }, (error'''),
 ]
 for old, new in edits:
     assert text.count(old) == 1, f'{path}: expected once: {old[:70]!r}'
@@ -2463,7 +2492,7 @@ node --test --test-concurrency=1 --test-timeout=60000 --test-name-pattern='playg
 does not provide an export named 'snapshot'
 ```
 
-**At this task** the file loads, and its one test fails, `✖ playground:shots takes the captures set`, on the first `capture-wings-vdb-source-<tab>.png` it does not find.
+**At this task** the file loads, and its one test fails, `✖ playground:shots takes the captures set`, because `shots.mjs` exits 1 before any file is checked: it still reads every `.cell iframe` title from the grid, so it opens Task 11's `source:<name>:<tab>` cells as stages, and each fails with `unknown scenario: source:…` (`playground/shots.mjs:39` and `playground/scenarios.js:125` at `acb38aa`).
 
 **Implementation.** In `playground/shots.mjs`:
 

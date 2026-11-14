@@ -3,10 +3,12 @@ title: knobs capture source fixtures implementation plan
 kind: plan
 target: knobs
 topic: capture-source-fixtures
-status: draft
+status: approved
 written: 2026-11-14T01:39:25Z
 by: claude
 worktree: /home/jmo/linda/repos/knobs/.worktrees/capture-source-fixtures
+approved_at: 2026-11-14T03:45:00Z
+approved_by: josh
 ---
 
 # knobs capture source fixtures implementation plan

@@ -6,8 +6,7 @@
 // The folder is moved into place only once the snapshot and the shots are
 // complete. It never starts a server and never writes to the checkout.
 // <project> is wings-vdb or mini-pylon; out defaults to playground/captures.
-import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +15,7 @@ import { build, snapshot } from './adapters/common.mjs';
 import * as miniPylon from './adapters/mini-pylon.mjs';
 import * as wingsVdb from './adapters/wings-vdb.mjs';
 import { pngSize } from './png.mjs';
+import { placeCapture, recover, removeAside, restoreAside } from './publish.mjs';
 
 const adapters = { [wingsVdb.name]: wingsVdb, [miniPylon.name]: miniPylon };
 const here = new URL('.', import.meta.url).pathname;
@@ -97,29 +97,19 @@ export async function unwindCapture({
   dest = null,
   partial = null,
   browser = null,
-  fs = { existsSync, renameSync, rmSync },
+  fs = null,
   warn = line => console.error(line),
 } = {}) {
   if (!published && error) {
     warn(`capture failed: ${error.message}`);
     if (aside && dest) {
-      let missing = false;
-      try {
-        missing = !fs.existsSync(dest);
-      } catch (checkError) {
-        warn(`capture: could not put the last capture back: ${checkError.message}`);
-      }
-      if (missing) {
-        try {
-          fs.renameSync(aside, dest);
-        } catch (renameError) {
-          warn(`capture: could not put the last capture back: ${renameError.message}`);
-        }
-      }
+      const renameError = restoreAside(aside, dest, fs);
+      if (renameError) warn(`capture: could not put the last capture back: ${renameError.message}`);
     }
     if (partial) {
       try {
-        fs.rmSync(partial, { recursive: true, force: true });
+        const files = fs ?? { rmSync };
+        files.rmSync(partial, { recursive: true, force: true });
       } catch (rmError) {
         warn(`capture: could not remove ${partial}: ${rmError.message}`);
       }
@@ -127,11 +117,8 @@ export async function unwindCapture({
   }
   if (browser) await closeQuietly(() => browser.close(), warn);
   if (published && aside) {
-    try {
-      fs.rmSync(aside, { recursive: true, force: true });
-    } catch (rmError) {
-      warn(`capture: could not remove ${aside}: ${rmError.message}; the next capture removes it`);
-    }
+    const warning = removeAside(aside, fs);
+    if (warning) warn(warning);
   }
   return published || !error ? 0 : 1;
 }
@@ -196,34 +183,21 @@ async function main() {
   let failed = null;
   try {
     mkdirSync(out, { recursive: true });
-    // A run that died after moving the last capture aside left it as .<project>-old-….
-    if (!existsSync(dest)) {
-      const olds = readdirSync(out).filter(name => name.startsWith(`.${project}-old-`));
-      if (olds.length) {
-        olds.sort((a, b) => statSync(join(out, b)).mtimeMs - statSync(join(out, a)).mtimeMs);
-        renameSync(join(out, olds[0]), dest);
-      }
-    }
-    for (const name of readdirSync(out)) {
-      if (name.startsWith(`.${project}-`)) rmSync(join(out, name), { recursive: true, force: true });
-    }
+    recover(out, project);
     partial = mkdtempSync(join(out, `.${project}-new-`));
     const capture = await build(adapter, checkout, values.reports ? { reports: resolve(values.reports) } : {});
     capture.vendored = await snapshot(adapter, checkout, join(partial, 'source'), { downscale });
     if (await answering(devUrl)) capture.shots = await shoot(partial);
     else capture.shotsSkipped = `the dev server at ${devUrl} was not answering`;
     writeFileSync(join(partial, 'capture.json'), `${JSON.stringify(capture, null, 2)}\n`);
-    if (existsSync(dest)) {
-      aside = join(out, `.${project}-old-${randomBytes(4).toString('hex')}`);
-      renameSync(dest, aside);
-    }
-    renameSync(partial, dest);
+    aside = placeCapture({ out, project, partial, dest }).aside;
     published = true;
     console.log(join(dest, 'capture.json'));
     console.log(join(dest, 'source'));
     for (const shot of capture.shots) console.log(join(dest, shot.file));
     if (capture.shotsSkipped) console.log(`no shots: ${capture.shotsSkipped}`);
   } catch (error) {
+    if (error.aside) aside = error.aside;
     failed = error;
   }
   const code = await unwindCapture({ error: failed, published, aside, dest, partial, browser });

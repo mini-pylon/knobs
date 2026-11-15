@@ -12,15 +12,35 @@ import { normalize } from '../../src/store.js';
 // The knobs checkout. A snapshot imports its stubs from here.
 export const repo = fileURLToPath(new URL('../..', import.meta.url));
 
-// The checkout's branch, commit and dirty flag; null for each outside git,
-// or when the folder sits inside some other repository.
-export function source(repo, dir) {
-  const git = (...args) => execFileSync('git', ['--no-optional-locks', '-C', dir, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 120000 }).trim();
+// The checkout's branch, commit and dirty flag. Null for each only when the
+// folder is outside git, or sits inside some other repository. A git call
+// that times out or fails for any other reason is thrown, naming the project
+// and the call, so a capture does not record a failure as "no repository".
+export function source(repo, dir, { timeout = 120000 } = {}) {
+  const git = (...args) => {
+    try {
+      return execFileSync('git', ['--no-optional-locks', '-C', dir, ...args], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout,
+      }).trim();
+    } catch (error) {
+      const stderr = `${error.stderr ?? ''}`.trim();
+      if (error.status === 128 && stderr.includes('not a git repository')) {
+        const outside = new Error('not a git repository');
+        outside.notRepo = true;
+        throw outside;
+      }
+      const why = error.code === 'ETIMEDOUT' ? 'timed out' : (stderr || error.message);
+      throw new Error(`${repo}: git ${args.join(' ')}: ${why}`);
+    }
+  };
   try {
-    if (realpathSync(git('rev-parse', '--show-toplevel')) !== realpathSync(dir)) throw new Error('not its own repository');
+    if (realpathSync(git('rev-parse', '--show-toplevel')) !== realpathSync(dir)) return { repo, branch: null, commit: null, dirty: null };
     return { repo, branch: git('rev-parse', '--abbrev-ref', 'HEAD'), commit: git('rev-parse', 'HEAD'), dirty: git('status', '--porcelain') !== '' };
-  } catch {
-    return { repo, branch: null, commit: null, dirty: null };
+  } catch (error) {
+    if (error.notRepo) return { repo, branch: null, commit: null, dirty: null };
+    throw error;
   }
 }
 

@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile, execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineControls } from '../../src/index.js';
@@ -144,6 +144,47 @@ test('source reads a git checkout\'s branch, commit and dirty flag, and is null 
     assert.equal(source('demo', dir).dirty, true);
   } finally { rmSync(dir, { recursive: true, force: true }); }
   assert.deepEqual(source('demo', join(fixtures, 'mini-pylon')).commit, null);
+});
+
+// A git on PATH that does one thing, so source() can be shown failing.
+const stubGit = (dir, script) => {
+  const bin = join(dir, 'bin');
+  mkdirSync(bin);
+  const file = join(bin, 'git');
+  writeFileSync(file, script);
+  chmodSync(file, 0o755);
+  return bin;
+};
+
+test('source throws when git times out, naming the project and the call', { timeout: 10000 }, () => {
+  const dir = scratch();
+  const saved = process.env.PATH;
+  process.env.PATH = `${stubGit(dir, '#!/bin/sh\nsleep 30\n')}:${saved}`;
+  try {
+    assert.throws(() => source('demo', dir, { timeout: 200 }), { message: 'demo: git rev-parse --show-toplevel: timed out' });
+  } finally {
+    process.env.PATH = saved;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('source throws when git fails, keeping git\'s own message', () => {
+  const dir = scratch();
+  const saved = process.env.PATH;
+  process.env.PATH = `${stubGit(dir, '#!/bin/sh\necho "index.lock: blocked" >&2\nexit 1\n')}:${saved}`;
+  try {
+    assert.throws(() => source('demo', dir), { message: 'demo: git rev-parse --show-toplevel: index.lock: blocked' });
+  } finally {
+    process.env.PATH = saved;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('source is null for a plain folder', () => {
+  const dir = scratch();
+  try {
+    assert.deepEqual(source('demo', dir), { repo: 'demo', branch: null, commit: null, dirty: null });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('build gives the capture.json shape', async () => {

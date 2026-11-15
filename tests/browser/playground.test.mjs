@@ -26,6 +26,8 @@ for (const file of ['controls.js', 'visual.js']) cpSync(join(exemplarDir('curve-
 // A captures folder of the test's own, built from the fixture copies of both
 // projects; wings-vdb's has one shot of its drawer.
 const captures = mkdtempSync(join(repo, 'tests', '.tmp', 'captures-'));
+// The fonts folder is the test's own and empty.
+const fonts = mkdtempSync(join(repo, 'tests', '.tmp', 'fonts-'));
 const captureFixtures = join(repo, 'tests', 'fixtures', 'captures');
 // A 1x1 PNG.
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
@@ -44,10 +46,10 @@ async function writeCaptures() {
 let site, browser;
 before(async () => {
   await writeCaptures();
-  site = await servePlayground({ drafts, captures, logLevel: 'error' });
+  site = await servePlayground({ drafts, captures, fonts, logLevel: 'error' });
   browser = await launch();
 });
-after(() => closeAll(() => browser?.close(), () => site?.close(), () => rmSync(drafts, { recursive: true, force: true }), () => rmSync(captures, { recursive: true, force: true })));
+after(() => closeAll(() => browser?.close(), () => site?.close(), ...[drafts, captures, fonts].map(dir => () => rmSync(dir, { recursive: true, force: true }))));
 
 // Opens one stage and waits until it has mounted or failed.
 async function stage(query) {
@@ -246,7 +248,7 @@ test('playground:shots saves every tab of a scenario and the grid', async () => 
   const out = await mkdtemp(join(repo, 'tests', '.tmp', 'shots-'));
   try {
     await new Promise((resolve, reject) => execFile(process.execPath, [join(repo, 'playground', 'shots.mjs'), '--only', 'stress', '--out', out],
-      { timeout: 90000 }, (error, stdout, stderr) => (error ? reject(new Error(`${error.message}\n${stderr}`)) : resolve(stdout))));
+      { timeout: 90000, env: { ...process.env, KNOBS_CAPTURES: captures, KNOBS_DRAFTS: drafts, KNOBS_WINGS_FONTS: fonts } }, (error, stdout, stderr) => (error ? reject(new Error(`${error.message}\n${stderr}`)) : resolve(stdout))));
     const files = (await readdir(out)).sort();
     // console, performance, then the five visible groups; hidden stays hidden.
     assert.deepEqual(files, [
@@ -326,7 +328,7 @@ test('the playground answers a host it is told to allow, and takes a same-host h
   // A drafts folder of its own: a draft written into the shared one makes the
   // main server reload its open pages, in the middle of the next test.
   const proxiedDrafts = mkdtempSync(join(repo, 'tests', '.tmp', 'drafts-'));
-  const proxied = await servePlayground({ drafts: proxiedDrafts, captures, logLevel: 'error', allowedHosts: ['knobs.example.test'] });
+  const proxied = await servePlayground({ drafts: proxiedDrafts, captures, fonts, logLevel: 'error', allowedHosts: ['knobs.example.test'] });
   try {
     const { request } = await import('node:http');
     const call = (method, path, headers, body) => new Promise((resolve, reject) => {
@@ -446,7 +448,7 @@ test('playground:shots takes the captures set', async () => {
   const out = mkdtempSync(join(repo, 'tests', '.tmp', 'shots-'));
   try {
     await new Promise((resolve, reject) => execFile(process.execPath, [join(repo, 'playground', 'shots.mjs'), '--only', 'captures', '--out', out, '--scale', '1'],
-      { timeout: 120000, env: { ...process.env, KNOBS_CAPTURES: captures, KNOBS_DRAFTS: drafts } },
+      { timeout: 120000, env: { ...process.env, KNOBS_CAPTURES: captures, KNOBS_DRAFTS: drafts, KNOBS_WINGS_FONTS: fonts } },
       (error, stdout, stderr) => (error ? reject(new Error(`${error.message}\n${stderr}`)) : resolve(stdout))));
     const files = readdirSync(out);
     assert.ok(files.includes('grid.png'));

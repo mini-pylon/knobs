@@ -2,7 +2,10 @@
 // library reloads the playground, @drafts resolved to the drafts folder
 // (playground/drafts/, or KNOBS_DRAFTS, or the drafts option), and @captures
 // to the captures folder (playground/captures/, or KNOBS_CAPTURES, or the
-// captures option). Shared by serve.mjs, shots.mjs and the tests.
+// captures option). A captured project's own page is served from that
+// folder, and wings-vdb's faces come from the fonts option, KNOBS_WINGS_FONTS,
+// or public/fonts in the wings-vdb checkout. Shared by serve.mjs, shots.mjs
+// and the tests.
 //
 // POST /__playground/draft { name, files: { 'controls.js', 'visual.js' | 'extension.js' } }
 // writes a draft the shell's paste form sends. Same-origin only.
@@ -12,6 +15,8 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { aliases, repo, serve } from '../tests/browser/lib/harness.mjs';
+import * as wingsVdb from './adapters/wings-vdb.mjs';
+import { fixturesPlugin } from './fixtures/routes.mjs';
 
 export const DRAFT_ROUTE = '/__playground/draft';
 const DRAFT_FILES = ['controls.js', 'visual.js', 'extension.js'];
@@ -80,17 +85,23 @@ function draftPlugin(drafts) {
   };
 }
 
-export function servePlayground({ host = '127.0.0.1', port = 0, drafts, captures, logLevel = 'info', allowedHosts = [] } = {}) {
+export async function servePlayground({ host = '127.0.0.1', port = 0, drafts, captures, fonts, logLevel = 'info', allowedHosts = [] } = {}) {
   const draftsDir = resolve(drafts ?? process.env.KNOBS_DRAFTS ?? join(repo, 'playground', 'drafts'));
   const capturesDir = resolve(captures ?? process.env.KNOBS_CAPTURES ?? join(repo, 'playground', 'captures'));
+  const fontsDir = resolve(fonts ?? process.env.KNOBS_WINGS_FONTS ?? join(wingsVdb.defaultCheckout, 'public', 'fonts'));
   mkdirSync(draftsDir, { recursive: true });
   mkdirSync(capturesDir, { recursive: true });
-  return serve(join(repo, 'playground'), {
+  const site = await serve(join(repo, 'playground'), {
     cacheDir: join(repo, 'tests', '.tmp', 'playground-vite'),
     logLevel,
     // A capture written after the server started reaches the scenario list too.
-    plugins: [draftPlugin(draftsDir), { name: 'knobs-playground-captures', configureServer: server => { server.watcher.add(capturesDir); } }],
+    plugins: [
+      draftPlugin(draftsDir),
+      { name: 'knobs-playground-captures', configureServer: server => { server.watcher.add(capturesDir); } },
+      fixturesPlugin({ captures: capturesDir, fonts: fontsDir, allowedHosts, logLevel }),
+    ],
     resolve: { alias: [...aliases(), { find: '@drafts', replacement: draftsDir }, { find: '@captures', replacement: capturesDir }], dedupe: ['react', 'react-dom'] },
     server: { host, port, strictPort: port !== 0, allowedHosts, fs: { allow: [repo, draftsDir, capturesDir] } },
   });
+  return { ...site, captures: capturesDir };
 }

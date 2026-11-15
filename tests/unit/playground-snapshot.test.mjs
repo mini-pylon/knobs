@@ -512,6 +512,45 @@ test('mini-pylon: a Python step that does not finish names the step', { timeout:
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('mini-pylon: Python leaves no temp folder after success, an error, or a timeout', { timeout: 20000 }, async () => {
+  const dir = scratch();
+  const tmp = join(dir, 'tmp');
+  mkdirSync(tmp);
+  const saved = process.env.TMPDIR;
+  process.env.TMPDIR = tmp;
+  const fresh = name => {
+    const dest = join(dir, name);
+    cpSync(join(fixtures, 'mini-pylon'), dest, { recursive: true });
+    return dest;
+  };
+  try {
+    await miniPylon.record(fresh('ok'), join(dir, 'ok-out'), { downscale: never });
+    assert.deepEqual(readdirSync(tmp), []);
+
+    const broken = fresh('broken');
+    writeFileSync(join(broken, 'tools', 'scene_params.py'), 'raise RuntimeError("boom")\n');
+    await assert.rejects(miniPylon.record(broken, join(dir, 'broken-out')));
+    assert.deepEqual(readdirSync(tmp), []);
+
+    const sleeper = fresh('sleeper');
+    const swatch = join(sleeper, 'tools', 'tweak_server.py');
+    const body = readFileSync(swatch, 'utf8').replace(
+      'def write_swatch_png(path, size, values):\n',
+      'def write_swatch_png(path, size, values):\n    import time\n    time.sleep(30)\n',
+    );
+    writeFileSync(swatch, body);
+    await assert.rejects(
+      miniPylon.record(sleeper, join(dir, 'sleeper-out'), { downscale: never, timeout: 400 }),
+      /timed out/,
+    );
+    assert.deepEqual(readdirSync(tmp), []);
+  } finally {
+    if (saved === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = saved;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('mini-pylon: recording that does not finish names the step', { timeout: 10000 }, async () => {
   const dir = scratch();
   try {

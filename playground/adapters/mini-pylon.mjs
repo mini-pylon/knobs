@@ -45,14 +45,16 @@ print(json.dumps(scene_params.schema()))
 `;
 
 // The program goes in a temp file, never on the command line, so a failure
-// names the step and Python's own stderr instead of the program text.
+// names the step and Python's own stderr instead of the program text. That
+// folder is the program's last argument, so a swatch written there goes
+// with the program when the run ends, including when Python is killed.
 function runPython(program, args, { input, what, cwd, timeout = 120000 }) {
   const dir = mkdtempSync(join(tmpdir(), 'knobs-py-'));
   try {
     const file = join(dir, 'run.py');
     writeFileSync(file, program);
     try {
-      return execFileSync('python3', ['-B', file, ...args], {
+      return execFileSync('python3', ['-B', file, ...args, dir], {
         cwd,
         encoding: 'utf8',
         input,
@@ -140,10 +142,10 @@ export async function read(checkout, { timeout } = {}) {
 // Renders.finals, and one swatch per payload text. Payloads arrive on stdin
 // as a JSON array of the page's own texts. Nothing is written into the checkout.
 const PROGRAM = `
-import json, shutil, struct, sys, tempfile, zlib
+import json, struct, sys, zlib
 from pathlib import Path
 
-tools, tweaks = sys.argv[1], sys.argv[2]
+tools, tweaks, folder = sys.argv[1], sys.argv[2], sys.argv[3]
 sys.path.insert(0, tools)
 import scene_params
 import tweak_server
@@ -178,25 +180,22 @@ holder.finals_dir = Path(tweaks)
 finals = tweak_server.Renders.finals(holder)
 
 swatches = []
-folder = tempfile.mkdtemp()
-try:
-    for text in payloads:
-        payload = json.loads(text)
-        resolved = scene_params.resolve(payload.get("values") or {}, True)
-        scene = {key: value for key, value in resolved.items() if not key.startswith("render.")}
-        size = min(int(resolved["render.preview_size"]), 256)
-        png = Path(folder) / "swatch.png"
-        tweak_server.write_swatch_png(png, size, scene)
-        data = png.read_bytes()
-        png.unlink()
-        swatches.append({
-            "payload": text,
-            "values": json.dumps(scene, sort_keys=True),
-            "rgb": first_pixel(data),
-            "size": size,
-        })
-finally:
-    shutil.rmtree(folder)
+out_dir = Path(folder)
+for text in payloads:
+    payload = json.loads(text)
+    resolved = scene_params.resolve(payload.get("values") or {}, True)
+    scene = {key: value for key, value in resolved.items() if not key.startswith("render.")}
+    size = min(int(resolved["render.preview_size"]), 256)
+    png = out_dir / "swatch.png"
+    tweak_server.write_swatch_png(png, size, scene)
+    data = png.read_bytes()
+    png.unlink()
+    swatches.append({
+        "payload": text,
+        "values": json.dumps(scene, sort_keys=True),
+        "rgb": first_pixel(data),
+        "size": size,
+    })
 
 print(json.dumps({
     "schema": scene_params.schema(),

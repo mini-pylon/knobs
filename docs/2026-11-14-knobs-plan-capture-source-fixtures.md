@@ -89,6 +89,28 @@ Where the spec was silent or wrong, this plan decided:
 - **Milestone 3: the playground** (Tasks 9 to 14). Ends with the shell's source side and switch, the grid's capture rows, the source shots, check-fixtures, the NOTICE and the README. Reviewer brief: open the shell and the grid on the stand-in captures (`KNOBS_CAPTURES=<tmp> KNOBS_WINGS_FONTS=<empty tmp> npm run playground -- --port <free port>`) and check Review Focus 2 and 7; read the README's source-side section as a newcomer would.
 - **Milestone 4: the real snapshots** (Task 15). Ends with both projects' real snapshots committed and passing check-fixtures. It does not run unattended: Task 15 needs wings-vdb's dev server up on port 5350, which only Josh starts, so the driver runs it with him once the server is up. Reviewer brief: check Review Focus 1, 3 and 5 on the committed snapshots, and that both checkouts' `git status` is as it was before the capture.
 
+## Amendments
+
+**Amendment 1 (2026-11-15): a static import after another statement on the same line is checked.** Task 2 defined a static import as one "whose line starts with `import`", so in `import a from './a.js'; import b from './b.js';` the check never saw `./b.js`, and a bad second import on a line passed capture. `imports()` now also takes an `import` statement that follows a `;` or `}` of code on the same line (after spaces). Comments, strings, template text and regex literals are not code, as before, so a `;` or `}` inside them starts nothing. Everything else Task 2 says of `imports()` stands, and every existing case keeps its result.
+
+- **Built** by a Milestone 1 build note of its own after Milestone 1's round 3 review, before Milestone 2, as a change to `playground/adapters/common.mjs` `imports()` and one new unit test in `tests/unit/playground-snapshot.test.mjs`, written red first.
+- **The test:**
+
+```js
+test('imports: a static import after another statement on the same line', () => {
+  assert.deepEqual(imports("import a from './a.js'; import { b } from './b.js';\nconst c = 1; import './c.css';\nif (x) {} import d from './d.js';"), [
+    { specifier: './a.js', names: ['default'] },
+    { specifier: './b.js', names: ['b'] },
+    { specifier: './c.css', names: [] },
+    { specifier: './d.js', names: ['default'] },
+  ]);
+  assert.deepEqual(imports("const s = 'a; import x from \\'./no.js\\'';\n// x; import y from './no.js';"), []);
+});
+```
+
+- **Red:** `node --test --test-name-pattern='^imports: a static import after' tests/unit/playground-snapshot.test.mjs` fails on its first `deepEqual` (only `./a.js` is found).
+- **Counts:** one more unit test from then on. Each later closing report states its count against the plan's and explains the difference.
+
 ## Facts the plan relies on
 
 The first probe installs the dependencies every later block needs:
@@ -227,7 +249,7 @@ node --test tests/unit/playground-capture.test.mjs
 **Interfaces.**
 
 - `playground/adapters/common.mjs` exports `repo` (the knobs checkout's absolute path, from `fileURLToPath(new URL('../..', import.meta.url))`), `imports(text)` and `snapshot(adapter, checkout, sourceDir, { downscale } = {})`.
-- `imports(text)` returns `[{ specifier, names }]`: first every static `import` statement whose line starts with `import` (after spaces), in source order; then every `export { … } from` and `export * from`, in source order; then every dynamic `import('<literal>')`. `names` for an import clause: the names inside braces, each before any `as`, then `'default'` for a default binding; none for a namespace (`* as x`) or a side-effect import; for `export { f } from`, the names in the braces; for `export *` and dynamic imports, none. A commented-out import and `import.meta` are not imports.
+- `imports(text)` returns `[{ specifier, names }]`: first every static `import` statement that starts a line (after spaces) or follows a `;` or `}` of code on the same line (after spaces), in source order (Amendment 1); then every `export { … } from` and `export * from`, in source order; then every dynamic `import('<literal>')`. `names` for an import clause: the names inside braces, each before any `as`, then `'default'` for a default binding; none for a namespace (`* as x`) or a side-effect import; for `export { f } from`, the names in the braces; for `export *` and dynamic imports, none. A commented-out import and `import.meta` are not imports.
 - `snapshot(adapter, checkout, sourceDir, { downscale })` returns `{ files: [{ path, from, sha256 }], stubs: [{ module, by }], recorded }`, with `files` in the adapter's `vendor` order and `recorded` what `adapter.record` returned (`[]` without one).
 - An adapter gains `vendor` (`[{ from, to }]`, paths in the checkout and under `source/`), `stubs` (`[{ module, by }]`: the checkout path a stub replaces, and the stub's path in knobs) and, optionally, `inputs` (checkout paths capture reads besides `vendor`) and `record(checkout, sourceDir, { downscale })`.
 - `playground/png.mjs` exports `pngSize(buffer)` (`{ width, height }`), `encodePng(width, height, rgb)` and `decodePng(buffer)` (`{ width, height, channels, pixels }`).

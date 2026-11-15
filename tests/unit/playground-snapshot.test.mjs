@@ -94,7 +94,7 @@ test('imports: each static, re-exported and dynamic import with the names it tak
     { specifier: './side.js', names: [] },
   ]);
   assert.deepEqual(imports("const s = `\nimport './nope.js';\n`;"), []);
-  assert.doesNotThrow(() => imports("import (\n"));
+  assert.throws(() => imports("import (\n"), { message: "line 2: ')' expected." });
   // A quote, a comment marker or a slash inside a regex literal is not a string or a comment.
   assert.deepEqual(imports("const q = /['\"]/;\nimport { b } from './b.js';\nconst m = import('./dyn.js');"), [
     { specifier: './b.js', names: ['b'] },
@@ -113,11 +113,34 @@ test('imports: each static, re-exported and dynamic import with the names it tak
   assert.deepEqual(imports("const x = a / b; const y = c / d;\nimport { b } from './b.js';"), [
     { specifier: './b.js', names: ['b'] },
   ]);
-  assert.throws(() => imports("const s = 'oops\nimport { b } from './b.js';"), /unterminated string on line 1/);
+  assert.throws(() => imports("const s = 'oops\nimport { b } from './b.js';"), { message: 'line 1: Unterminated string literal.' });
   // `from` is a binding name unless a quoted specifier follows it.
   assert.deepEqual(imports("import from from './f.js';"), [
     { specifier: './f.js', names: ['default'] },
   ]);
+});
+
+test('imports: a statement anywhere on its line, and a regex literal anywhere', () => {
+  assert.deepEqual(imports("import a from './a.js'; import { b } from './b.js';\nconst c = 1; import './c.css';\nif (x) {} import d from './d.js';\nexport { a }; import e from './e.js';\nimport.meta.hot?.accept(); import f from './f.js';\nexport * from './w.js'; export { g } from './z.js';"), [
+    { specifier: './a.js', names: ['default'] },
+    { specifier: './b.js', names: ['b'] },
+    { specifier: './c.css', names: [] },
+    { specifier: './d.js', names: ['default'] },
+    { specifier: './e.js', names: ['default'] },
+    { specifier: './f.js', names: ['default'] },
+    { specifier: './w.js', names: [] },
+    { specifier: './z.js', names: ['g'] },
+  ]);
+  assert.deepEqual(imports("const s = 'a; } import x from \\'./no.js\\'';\n// x; } import y from './no.js';\n/* ; } import z from './no.js'; */"), []);
+  assert.deepEqual(imports("for (const c of /x\\/*/.exec(s)) {}\nfunction f(s) {\n  let n = 0\n  return /['\"]/.test(s)\n}\nlet i = 4, x\nx = i++ / 2\nif (ok) /x\\/*/.test(s);\nimport { b } from './b.js';\nconst m = import(\n  './dyn.js'\n);\nconst t = import(`./t.js`);"), [
+    { specifier: './b.js', names: ['b'] },
+    { specifier: './dyn.js', names: [] },
+    { specifier: './t.js', names: [] },
+  ]);
+  assert.deepEqual(imports("const s = 'a\\\r\nb';\r\nimport { b } from './b.js';\r\n"), [
+    { specifier: './b.js', names: ['b'] },
+  ]);
+  assert.throws(() => imports("import { a } from './a.js';\nconst s = 'oops"), { message: 'line 2: Unterminated string literal.' });
 });
 
 test('stub: the chat.js stub is a thread that stays empty, with what main.js reads from it', () => {
@@ -366,7 +389,7 @@ test('wings-vdb: an import that cannot be read names the project and the file', 
     appendFileSync(join(checkout, 'src', 'main.js'), '\nimport { a };\n');
     await assert.rejects(
       snapshot(wingsVdb, checkout, join(dir, 'source'), { downscale: never }),
-      /wings-vdb: src\/main\.js: import has no specifier/,
+      /wings-vdb: src\/main\.js: line \d+: 'from' expected\./,
     );
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

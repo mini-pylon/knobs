@@ -30,7 +30,8 @@ export const css = `
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
 input, select { font: inherit; color: inherit; background: none; border: 0; padding: 0; }
 .term-head { position: relative; display: flex; align-items: center; gap: 16px; padding: var(--pad) var(--pad) 10px; line-height: 1; }
-.term-tabs { display: flex; gap: 16px; overflow-x: auto; }
+/* Tabs that do not fit wrap onto another line rather than scroll out of sight. */
+.term-tabs { display: flex; flex-wrap: wrap; gap: 8px 16px; flex: 0 1 auto; min-width: 0; }
 .term-tab, .term-close { color: var(--term-act); }
 .term-tab.active, .term-tab:hover, .term-close:hover { color: var(--term-act-hi); }
 .term-close { margin-left: auto; font-size: 16px; line-height: 12px; }
@@ -84,7 +85,7 @@ input, select { font: inherit; color: inherit; background: none; border: 0; padd
   .term-row { grid-template-columns: 17ch minmax(0, 1fr) 5ch; gap: 12px; padding: 3px var(--pad); }
   .term-status { display: none; }
   .term-head { gap: 12px; }
-  .term-tabs { flex: 0 1 auto; min-width: 0; gap: 12px; }
+  .term-tabs { gap: 8px 12px; }
   .term-prompt input { font-size: 16px; }
 }
 `;

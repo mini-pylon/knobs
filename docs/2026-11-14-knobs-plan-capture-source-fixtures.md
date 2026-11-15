@@ -2663,6 +2663,8 @@ The driver runs this task with Josh, once he has started wings-vdb's dev server 
 
 ### Amendment 1 (2026-11-15): `imports()` reads a file with the TypeScript parser
 
+**Approved** by Josh on 2026-11-15, after doc-review (pass 1 same-family, pass 2 grok-4.7).
+
 **Why.** Task 2 defined a static import as one "whose line starts with `import`". So in `import a from './a.js'; import b from './b.js';`, and in `export * from './a.js'; export * from './b.js';`, the check never saw the second statement, and a bad one passed capture. The hand-written lexer that Milestone 1's reviews then grew lost imports after a regex literal, three rounds running: after a quote or `/*` inside one, after `of`, `in`, `return` or `i++`, and after a regex that follows `)`. Each loss was silent. A real parser reads JavaScript as JavaScript does, so none of these cases needs a rule of its own. `typescript` 5.9.3 is already an exact devDependency, so no package is added (`package.json:54`, `package-lock.json:919` at `e88e852`).
 
 **The rule.** It replaces Task 2's `imports(text)` Interfaces line wherever the two differ.

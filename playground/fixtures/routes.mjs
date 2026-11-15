@@ -114,6 +114,56 @@ function missingSnapshot(project) {
   };
 }
 
+function requestPath(req) {
+  return String(req.originalUrl || req.url || '').split('?')[0];
+}
+
+// A request a mounted handler hands back. The body names the path and, when
+// the handler passed an error on, that error's message.
+function handedBack(req, res, err) {
+  if (res.writableEnded || res.headersSent) return;
+  const path = requestPath(req);
+  const message = err?.message ? String(err.message) : '';
+  sendJson(res, err ? 500 : 404, { error: message ? `${path}: ${message}` : path });
+}
+
+// Nothing mounted here may fall through to the playground's own pages.
+function seal(handler) {
+  return (req, res) => {
+    let settled = false;
+    const finish = err => {
+      if (settled) return;
+      settled = true;
+      handedBack(req, res, err);
+    };
+    try {
+      const result = handler(req, res, finish);
+      if (result && typeof result.catch === 'function') result.catch(finish);
+    } catch (error) {
+      finish(error);
+    }
+  };
+}
+
+function mount(server, route, handler) {
+  server.middlewares.use(route, seal(handler));
+}
+
+// Vite's middleware-mode error handler logs the error and calls next() with
+// nothing attached, which drops the message. Answer here instead.
+function keepSourceError(middlewares) {
+  const layer = middlewares.stack.find(entry => entry.handle?.name === 'viteErrorMiddleware')
+    ?? middlewares.stack.find(entry => entry.handle?.length === 4);
+  if (!layer) throw new Error('the wings-vdb fixture has no error handler');
+  layer.handle = function sourceError(err, req, res, next) {
+    if (res.writableEnded || res.headersSent) {
+      next(err);
+      return;
+    }
+    handedBack(req, res, err);
+  };
+}
+
 export function fixturesPlugin({ captures, fonts, allowedHosts = [], logLevel = 'error' }) {
   let wings = null;
   return {
@@ -122,24 +172,25 @@ export function fixturesPlugin({ captures, fonts, allowedHosts = [], logLevel = 
       const wingsSource = join(captures, 'wings-vdb', 'source');
       if (existsSync(join(wingsSource, 'index.html'))) {
         wings = await wingsFixture({ sourceDir: wingsSource, httpServer: server.httpServer, allowedHosts, logLevel });
-        server.middlewares.use('/captures/wings-vdb/source', wings.middlewares);
+        keepSourceError(wings.middlewares);
+        mount(server, '/captures/wings-vdb/source', wings.middlewares);
       } else {
-        server.middlewares.use('/captures/wings-vdb/source', missingSnapshot('wings-vdb'));
+        mount(server, '/captures/wings-vdb/source', missingSnapshot('wings-vdb'));
       }
       const routes = wingsRoutes({ sourceDir: wingsSource, fonts });
-      server.middlewares.use('/captures/wings-vdb/fonts', routes.fontState);
-      server.middlewares.use('/wings-wide.svg', routes.svg);
-      server.middlewares.use('/fonts', routes.fonts);
-      server.middlewares.use('/__wings', routes.wings);
+      mount(server, '/captures/wings-vdb/fonts', routes.fontState);
+      mount(server, '/wings-wide.svg', routes.svg);
+      mount(server, '/fonts', routes.fonts);
+      mount(server, '/__wings', routes.wings);
       const pylonSource = join(captures, 'mini-pylon', 'source');
       if (existsSync(join(pylonSource, 'data', 'schema.json'))) {
         const mini = miniPylon(pylonSource);
-        server.middlewares.use('/captures/mini-pylon/source', mini.files);
-        server.middlewares.use('/api', mini.api);
+        mount(server, '/captures/mini-pylon/source', mini.files);
+        mount(server, '/api', mini.api);
       } else {
         const missing = missingSnapshot('mini-pylon');
-        server.middlewares.use('/captures/mini-pylon/source', missing);
-        server.middlewares.use('/api', missing);
+        mount(server, '/captures/mini-pylon/source', missing);
+        mount(server, '/api', missing);
       }
     },
     closeServer() {

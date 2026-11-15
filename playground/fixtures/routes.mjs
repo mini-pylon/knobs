@@ -166,31 +166,42 @@ function keepSourceError(middlewares) {
 
 export function fixturesPlugin({ captures, fonts, allowedHosts = [], logLevel = 'error' }) {
   let wings = null;
+  // A throw inside configureServer never reaches serve()'s close: Vite does not
+  // return the server. Keep the error and let the caller close before listen.
+  const boot = { error: null };
   return {
     name: 'knobs-playground-fixtures',
+    boot,
     async configureServer(server) {
-      const wingsSource = join(captures, 'wings-vdb', 'source');
-      if (existsSync(join(wingsSource, 'index.html'))) {
-        wings = await wingsFixture({ sourceDir: wingsSource, httpServer: server.httpServer, allowedHosts, logLevel });
-        keepSourceError(wings.middlewares);
-        mount(server, '/captures/wings-vdb/source', wings.middlewares);
-      } else {
-        mount(server, '/captures/wings-vdb/source', missingSnapshot('wings-vdb'));
-      }
-      const routes = wingsRoutes({ sourceDir: wingsSource, fonts });
-      mount(server, '/captures/wings-vdb/fonts', routes.fontState);
-      mount(server, '/wings-wide.svg', routes.svg);
-      mount(server, '/fonts', routes.fonts);
-      mount(server, '/__wings', routes.wings);
-      const pylonSource = join(captures, 'mini-pylon', 'source');
-      if (existsSync(join(pylonSource, 'data', 'schema.json'))) {
-        const mini = miniPylon(pylonSource);
-        mount(server, '/captures/mini-pylon/source', mini.files);
-        mount(server, '/api', mini.api);
-      } else {
-        const missing = missingSnapshot('mini-pylon');
-        mount(server, '/captures/mini-pylon/source', missing);
-        mount(server, '/api', missing);
+      try {
+        const wingsSource = join(captures, 'wings-vdb', 'source');
+        if (existsSync(join(wingsSource, 'index.html'))) {
+          wings = await wingsFixture({ sourceDir: wingsSource, httpServer: server.httpServer, allowedHosts, logLevel });
+          keepSourceError(wings.middlewares);
+          mount(server, '/captures/wings-vdb/source', wings.middlewares);
+        } else {
+          mount(server, '/captures/wings-vdb/source', missingSnapshot('wings-vdb'));
+        }
+        const routes = wingsRoutes({ sourceDir: wingsSource, fonts });
+        mount(server, '/captures/wings-vdb/fonts', routes.fontState);
+        mount(server, '/wings-wide.svg', routes.svg);
+        mount(server, '/fonts', routes.fonts);
+        mount(server, '/__wings', routes.wings);
+        const pylonSource = join(captures, 'mini-pylon', 'source');
+        if (existsSync(join(pylonSource, 'data', 'schema.json'))) {
+          const mini = miniPylon(pylonSource);
+          mount(server, '/captures/mini-pylon/source', mini.files);
+          mount(server, '/api', mini.api);
+        } else {
+          const missing = missingSnapshot('mini-pylon');
+          mount(server, '/captures/mini-pylon/source', missing);
+          mount(server, '/api', missing);
+        }
+      } catch (error) {
+        const opened = wings;
+        wings = null;
+        if (opened) await opened.close().catch(() => {});
+        boot.error = error;
       }
     },
     closeServer() {

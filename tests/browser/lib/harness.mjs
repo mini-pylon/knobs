@@ -56,9 +56,19 @@ export function viteConfig(root, extra = {}) {
   };
 }
 
-export async function serve(root, extra) {
-  const server = await createServer(viteConfig(root, extra));
-  await server.listen();
+export async function serve(root, extra = {}) {
+  // beforeListen is not a Vite option. A start that fails after the server
+  // exists, including listen(), has to close it or the watcher keeps the process up.
+  const { beforeListen, ...config } = extra;
+  let server;
+  try {
+    server = await createServer(viteConfig(root, config));
+    if (beforeListen) await beforeListen(server);
+    await server.listen();
+  } catch (error) {
+    if (server) await server.close();
+    throw error;
+  }
   const { port } = server.httpServer.address();
   return { server, url: `http://127.0.0.1:${port}/`, port, close: () => server.close() };
 }

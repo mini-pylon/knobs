@@ -3,7 +3,9 @@
 // from the stand-in checkout; nothing here reads a real project.
 import test, { describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { snapshot } from '../../playground/adapters/common.mjs';
@@ -71,6 +73,48 @@ describe('source errors stay on the source prefix', { concurrency: 1 }, () => {
       assert.doesNotMatch(text, /must not reach the fixture/);
     } finally {
       await site.close();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test('a start on a taken port exits by itself with the port error', async () => {
+    const root = mkdtempSync(join(repo, 'tests', '.tmp', 'serve-'));
+    const captures = join(root, 'captures');
+    await snapshot(wingsVdb, checkout, join(captures, 'wings-vdb', 'source'));
+    const drafts = join(root, 'drafts');
+    const fonts = join(root, 'fonts');
+    mkdirSync(drafts);
+    mkdirSync(fonts);
+    const holder = createServer();
+    await new Promise(resolve => holder.listen(0, '127.0.0.1', resolve));
+    const port = holder.address().port;
+    const script = `
+      import { servePlayground } from ${JSON.stringify(join(repo, 'playground', 'server.mjs'))};
+      try {
+        await servePlayground({
+          host: '127.0.0.1',
+          port: ${port},
+          drafts: ${JSON.stringify(drafts)},
+          captures: ${JSON.stringify(captures)},
+          fonts: ${JSON.stringify(fonts)},
+          logLevel: 'error',
+        });
+        console.error('STARTED');
+      } catch (error) {
+        console.error(error.message);
+      }
+    `;
+    try {
+      const run = await new Promise(resolve => {
+        execFile(process.execPath, ['--input-type=module', '-e', script], { timeout: 12000 }, (error, stdout, stderr) => {
+          resolve({ error, stdout, stderr });
+        });
+      });
+      assert.equal(run.error, null, `${run.error?.message}\n${run.stderr}`);
+      assert.match(run.stderr, /already in use/);
+      assert.doesNotMatch(run.stderr, /STARTED/);
+    } finally {
+      holder.close();
       rmSync(root, { recursive: true, force: true });
     }
   });

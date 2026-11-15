@@ -94,6 +94,7 @@ export async function servePlayground({ host = '127.0.0.1', port = 0, drafts, ca
   const draftsDir = realpathSync(draftsResolved);
   const capturesDir = realpathSync(capturesResolved);
   const fontsDir = resolve(fonts ?? process.env.KNOBS_WINGS_FONTS ?? join(wingsVdb.defaultCheckout, 'public', 'fonts'));
+  const fixtures = fixturesPlugin({ captures: capturesDir, fonts: fontsDir, allowedHosts, logLevel });
   const site = await serve(join(repo, 'playground'), {
     cacheDir: join(repo, 'tests', '.tmp', 'playground-vite'),
     logLevel,
@@ -101,8 +102,11 @@ export async function servePlayground({ host = '127.0.0.1', port = 0, drafts, ca
     plugins: [
       draftPlugin(draftsDir),
       { name: 'knobs-playground-captures', configureServer: server => { server.watcher.add(capturesDir); } },
-      fixturesPlugin({ captures: capturesDir, fonts: fontsDir, allowedHosts, logLevel }),
+      fixtures,
     ],
+    beforeListen() {
+      if (fixtures.boot.error) throw fixtures.boot.error;
+    },
     resolve: { alias: [...aliases(), { find: '@drafts', replacement: draftsDir }, { find: '@captures', replacement: capturesDir }], dedupe: ['react', 'react-dom'] },
     server: { host, port, strictPort: port !== 0, allowedHosts, fs: { allow: [realpathSync(repo), draftsDir, capturesDir] } },
   });

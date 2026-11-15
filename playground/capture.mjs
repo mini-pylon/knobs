@@ -119,6 +119,7 @@ export async function unwindCapture({
   fs = null,
   warn = line => console.error(line),
 } = {}) {
+  if (published && error) warn(`capture: published, then: ${error.message}`);
   if (!published && error) {
     warn(`capture failed: ${error.message}`);
     if (aside && dest) {

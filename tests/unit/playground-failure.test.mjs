@@ -60,6 +60,18 @@ test('a browser that rejects after a published capture warns and still removes t
   assert.deepEqual(removed, ['/out/.p-old']);
 });
 
+test('an error after the capture was published is printed and the exit code stays 0', async () => {
+  const { unwindCapture } = await import('../../playground/capture.mjs');
+  const lines = [];
+  const code = await unwindCapture({
+    published: true,
+    error: new Error('the log broke'),
+    warn: line => lines.push(line),
+  });
+  assert.equal(code, 0);
+  assert.deepEqual(lines, ['capture: published, then: the log broke']);
+});
+
 test('a browser that rejects after a failed capture does not change the exit code', async () => {
   const { unwindCapture } = await import('../../playground/capture.mjs');
   const lines = [];

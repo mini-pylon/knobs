@@ -135,13 +135,21 @@ test('recover restores the newest old folder and removes the rest', async () => 
   }
 });
 
-test('a dead run\'s dot folders under captures are ignored, and a capture is not', () => {
-  const ignored = execFileSync('git', ['check-ignore', '-v', '--', 'playground/captures/.p-old-dead/', 'playground/captures/.p-new-dead/'], { encoding: 'utf8' });
+const gitWorkTree = (() => {
+  try {
+    return execFileSync('git', ['-C', repo, 'rev-parse', '--is-inside-work-tree'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim() === 'true';
+  } catch {
+    return false;
+  }
+})();
+
+test('a dead run\'s dot folders under captures are ignored, and a capture is not', { skip: gitWorkTree ? false : 'not a git work tree' }, () => {
+  const ignored = execFileSync('git', ['-C', repo, 'check-ignore', '-v', '--', 'playground/captures/.p-old-dead/', 'playground/captures/.p-new-dead/'], { encoding: 'utf8' });
   assert.match(ignored, /playground\/captures\/\.\*\//);
   assert.equal(ignored.trim().split('\n').length, 2);
   let tracked = false;
   try {
-    execFileSync('git', ['check-ignore', '-q', '--', 'playground/captures/wings-vdb'], { encoding: 'utf8' });
+    execFileSync('git', ['-C', repo, 'check-ignore', '-q', '--', 'playground/captures/wings-vdb'], { encoding: 'utf8' });
     tracked = true;
   } catch (error) {
     assert.equal(error.status, 1);

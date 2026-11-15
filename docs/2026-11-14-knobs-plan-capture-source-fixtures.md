@@ -23,7 +23,7 @@ approved_by: josh
 ## Global Constraints
 
 - Base commit `acb38aa` on `capture-source-fixtures`: the approved spec on top of `ea8e929` on `main`, with no code change. At the base, `npm run test:unit` gives 235 pass, 0 fail, and `npm run test:browser` gives 195 pass, 0 fail, in about 75 s.
-- Counts when each milestone ends: Milestone 1, 257 unit and 196 browser; Milestone 2, 282 and 205; Milestone 3, 284 and 213; Milestone 4, the same. A count that differs is recorded and explained in the closing report.
+- Counts when each milestone ends: Milestone 1, 257 unit and 196 browser; Milestone 2, 282 and 205; Milestone 3, 284 and 213; Milestone 4, the same. Amendment 1 adds one unit test to each count from Milestone 1's end on: 258, 283, 285 and 285. A count that differs is recorded and explained in the closing report.
 - Every test in this plan was run before the plan was written, in a throwaway copy of the base, against a rough reference implementation of every task: 284 unit and 213 browser tests passed. Breaking the reference on purpose was caught each time: a clamp that keeps the value's type instead of the bound's fails the int-bound swatch; a wings-vdb tab seeded as a bare string fails the seed's encoding test; a stub whose names go unchecked passes a bad import; a seed that clears only `localStorage` leaves `wings-vdb:defaults-note`; floats printed as JavaScript prints them fail the `dumps` test (no payload the page can send reaches a whole-number float, so the swatch tests alone would not catch it); a capture that leaves a dead run's folder fails the capture test; a capture that does not put back a last capture a dead run left aside fails the recovery test. Three tests caught bugs in the reference itself: an int read from `-0` kept its sign, the grid's knobs cells lost their class, and the shell tests counted the expected font 404s as errors. The reference capture was also run read-only on the real checkouts (snapshots of 408 KB for wings-vdb and 796 KB for mini-pylon, its two finals downscaled to 480 px, and neither checkout's `git status` changed), and the reference check-fixtures passed on those real snapshots: mini-pylon 8 tabs, wings-vdb 7 tabs, fonts local.
 - Build each task to its description and no further. A later task's tests fail until its own task, and that is expected. A test that seems impossible to pass means the implementation has drifted from the description: stop and report it. Never weaken, skip or delete a check or a test, and never edit a test to make it pass.
 - Dependencies: a worktree starts with no `node_modules`. Run `npm ci --prefer-offline --ignore-scripts` first. Python 3 runs the stand-in checkout's `tools/*.py`; it is on the machine (`python3`).
@@ -88,28 +88,6 @@ Where the spec was silent or wrong, this plan decided:
 - **Milestone 2: serving** (Tasks 5 to 8). Ends with the playground serving both source pages under their prefixes with their root paths, the wings-vdb fixture's HMR on the playground's port, and the stand-in answering as `tweak_server.py` does. Reviewer brief: check Review Focus 4 and 6; check that every route is added in the hook's body, that `closeServer` closes the fixture, and that no route serves a path outside its folder.
 - **Milestone 3: the playground** (Tasks 9 to 14). Ends with the shell's source side and switch, the grid's capture rows, the source shots, check-fixtures, the NOTICE and the README. Reviewer brief: open the shell and the grid on the stand-in captures (`KNOBS_CAPTURES=<tmp> KNOBS_WINGS_FONTS=<empty tmp> npm run playground -- --port <free port>`) and check Review Focus 2 and 7; read the README's source-side section as a newcomer would.
 - **Milestone 4: the real snapshots** (Task 15). Ends with both projects' real snapshots committed and passing check-fixtures. It does not run unattended: Task 15 needs wings-vdb's dev server up on port 5350, which only Josh starts, so the driver runs it with him once the server is up. Reviewer brief: check Review Focus 1, 3 and 5 on the committed snapshots, and that both checkouts' `git status` is as it was before the capture.
-
-## Amendments
-
-**Amendment 1 (2026-11-15): a static import after another statement on the same line is checked.** Task 2 defined a static import as one "whose line starts with `import`", so in `import a from './a.js'; import b from './b.js';` the check never saw `./b.js`, and a bad second import on a line passed capture. `imports()` now also takes an `import` statement that follows a `;` or `}` of code on the same line (after spaces). Comments, strings, template text and regex literals are not code, as before, so a `;` or `}` inside them starts nothing. Everything else Task 2 says of `imports()` stands, and every existing case keeps its result.
-
-- **Built** by a Milestone 1 build note of its own after Milestone 1's round 3 review, before Milestone 2, as a change to `playground/adapters/common.mjs` `imports()` and one new unit test in `tests/unit/playground-snapshot.test.mjs`, written red first.
-- **The test:**
-
-```js
-test('imports: a static import after another statement on the same line', () => {
-  assert.deepEqual(imports("import a from './a.js'; import { b } from './b.js';\nconst c = 1; import './c.css';\nif (x) {} import d from './d.js';"), [
-    { specifier: './a.js', names: ['default'] },
-    { specifier: './b.js', names: ['b'] },
-    { specifier: './c.css', names: [] },
-    { specifier: './d.js', names: ['default'] },
-  ]);
-  assert.deepEqual(imports("const s = 'a; import x from \\'./no.js\\'';\n// x; import y from './no.js';"), []);
-});
-```
-
-- **Red:** `node --test --test-name-pattern='^imports: a static import after' tests/unit/playground-snapshot.test.mjs` fails on its first `deepEqual` (only `./a.js` is found).
-- **Counts:** one more unit test from then on. Each later closing report states its count against the plan's and explains the difference.
 
 ## Facts the plan relies on
 
@@ -249,7 +227,7 @@ node --test tests/unit/playground-capture.test.mjs
 **Interfaces.**
 
 - `playground/adapters/common.mjs` exports `repo` (the knobs checkout's absolute path, from `fileURLToPath(new URL('../..', import.meta.url))`), `imports(text)` and `snapshot(adapter, checkout, sourceDir, { downscale } = {})`.
-- `imports(text)` returns `[{ specifier, names }]`: first every static `import` statement that starts a line (after spaces) or follows a `;` or `}` of code on the same line (after spaces), in source order (Amendment 1); then every `export { … } from` and `export * from`, in source order; then every dynamic `import('<literal>')`. `names` for an import clause: the names inside braces, each before any `as`, then `'default'` for a default binding; none for a namespace (`* as x`) or a side-effect import; for `export { f } from`, the names in the braces; for `export *` and dynamic imports, none. A commented-out import and `import.meta` are not imports.
+- `imports(text)` returns `[{ specifier, names }]` (Amendment 1 replaces this rule: the file is parsed with the TypeScript parser, and a statement is found wherever it sits): first every static `import` statement, in source order; then every `export { … } from` and `export * from`, in source order; then every dynamic `import('<literal>')`. `names` for an import clause: the names inside braces, each before any `as`, then `'default'` for a default binding; none for a namespace (`* as x`) or a side-effect import; for `export { f } from`, the names in the braces; for `export *` and dynamic imports, none. A commented-out import and `import.meta` are not imports.
 - `snapshot(adapter, checkout, sourceDir, { downscale })` returns `{ files: [{ path, from, sha256 }], stubs: [{ module, by }], recorded }`, with `files` in the adapter's `vendor` order and `recorded` what `adapter.record` returned (`[]` without one).
 - An adapter gains `vendor` (`[{ from, to }]`, paths in the checkout and under `source/`), `stubs` (`[{ module, by }]`: the checkout path a stub replaces, and the stub's path in knobs) and, optionally, `inputs` (checkout paths capture reads besides `vendor`) and `record(checkout, sourceDir, { downscale })`.
 - `playground/png.mjs` exports `pngSize(buffer)` (`{ width, height }`), `encodePng(width, height, rgb)` and `decodePng(buffer)` (`{ width, height, channels, pixels }`).
@@ -2680,3 +2658,74 @@ The driver runs this task with Josh, once he has started wings-vdb's dev server 
 
 **Commit.** `chore(captures): snapshot wings-vdb's and mini-pylon's own pages`, staging `playground/captures/wings-vdb/` and `playground/captures/mini-pylon/` by path.
 
+## Amendments
+
+### Amendment 1 (2026-11-15): `imports()` reads a file with the TypeScript parser
+
+**Why.** Task 2 defined a static import as one "whose line starts with `import`". So in `import a from './a.js'; import b from './b.js';`, and in `export * from './a.js'; export * from './b.js';`, the check never saw the second statement, and a bad one passed capture. The hand-written lexer that Milestone 1's reviews then grew lost imports after a regex literal, three rounds running: after a quote or `/*` inside one, after `of`, `in`, `return` or `i++`, and after a regex that follows `)`. Each loss was silent. A real parser reads JavaScript as JavaScript does, so none of these cases needs a rule of its own. `typescript` 5.9.3 is already an exact devDependency, so no package is added.
+
+**The rule.** It replaces Task 2's `imports(text)` Interfaces line wherever the two differ.
+
+- `imports(text)` parses `text` with `ts.createSourceFile('module.js', text, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)`, with `import ts from 'typescript'`.
+- A file with any parse diagnostic is refused. The error is `line <n>: <message>` for the first entry of the source file's `parseDiagnostics`: `<n>` is 1-based, from `getLineAndCharacterOfPosition(start).line + 1`, and `<message>` is `ts.flattenDiagnosticMessageText(messageText, ' ')`. `snapshot` reports it as it reports any import error, `<name>: <from>: line <n>: <message>`. `parseDiagnostics` is not in TypeScript's public typings; it was checked present and filled at 5.9.3 on 2026-11-15, and the exact pin keeps it.
+- It returns `[{ specifier, names }]` in three groups, as before:
+  - first every top-level `ImportDeclaration`, in source order;
+  - then every top-level `ExportDeclaration` that has a `moduleSpecifier`, in source order;
+  - then every `CallExpression` whose `expression` is the `import` keyword and whose first argument is a string literal or a template literal with no substitutions, in source order (a depth-first walk with `ts.forEachChild`). A dynamic import of anything else is not checked here, as before; serving checks it at run time.
+- `names` for an import: each named binding's imported name (`(propertyName ?? name).text`), then `'default'` when the clause has a default binding. A namespace or side-effect import has none. For `export { … } from`, each element's `(propertyName ?? name).text`. For `export *` and `export * as ns`, none. For a dynamic import, none.
+- Comments, strings, template text and regex literals are never statements, wherever they sit. A statement is found wherever it sits on its line.
+- `maskNonCode` and the lexer helpers only it and the old `imports()` use go. So do the comments in `playground/adapters/common.mjs` that state the old rule ("whose statement starts with `import`", "never takes the next one", and the like).
+
+**Files.** Edit `playground/adapters/common.mjs` and `tests/unit/playground-snapshot.test.mjs`.
+
+**Existing assertions that change**, in `tests/unit/playground-snapshot.test.mjs`. The old lexer's own messages and one allowance for invalid code are replaced; nothing else in an existing test changes.
+
+- In `imports: each static, re-exported and dynamic import with the names it takes`:
+  - `assert.doesNotThrow(() => imports("import (\n"));` becomes ``assert.throws(() => imports("import (\n"), { message: "line 2: ')' expected." });``
+  - `assert.throws(() => imports("const s = 'oops\nimport { b } from './b.js';"), /unterminated string on line 1/);` becomes `assert.throws(() => imports("const s = 'oops\nimport { b } from './b.js';"), { message: 'line 1: Unterminated string literal.' });`
+- In `wings-vdb: an import that cannot be read names the project and the file`: `/wings-vdb: src\/main\.js: import has no specifier/` becomes `/wings-vdb: src\/main\.js: line \d+: 'from' expected\./`.
+
+**The new test**, after the `imports:` test:
+
+```js
+test('imports: a statement anywhere on its line, and a regex literal anywhere', () => {
+  assert.deepEqual(imports("import a from './a.js'; import { b } from './b.js';\nconst c = 1; import './c.css';\nif (x) {} import d from './d.js';\nexport { a }; import e from './e.js';\nimport.meta.hot?.accept(); import f from './f.js';\nexport * from './w.js'; export { g } from './z.js';"), [
+    { specifier: './a.js', names: ['default'] },
+    { specifier: './b.js', names: ['b'] },
+    { specifier: './c.css', names: [] },
+    { specifier: './d.js', names: ['default'] },
+    { specifier: './e.js', names: ['default'] },
+    { specifier: './f.js', names: ['default'] },
+    { specifier: './w.js', names: [] },
+    { specifier: './z.js', names: ['g'] },
+  ]);
+  assert.deepEqual(imports("const s = 'a; } import x from \\'./no.js\\'';\n// x; } import y from './no.js';\n/* ; } import z from './no.js'; */"), []);
+  assert.deepEqual(imports("for (const c of /x\\/*/.exec(s)) {}\nfunction f(s) {\n  let n = 0\n  return /['\"]/.test(s)\n}\nlet i = 4, x\nx = i++ / 2\nif (ok) /x\\/*/.test(s);\nimport { b } from './b.js';\nconst m = import(\n  './dyn.js'\n);\nconst t = import(`./t.js`);"), [
+    { specifier: './b.js', names: ['b'] },
+    { specifier: './dyn.js', names: [] },
+    { specifier: './t.js', names: [] },
+  ]);
+  assert.deepEqual(imports("const s = 'a\\\r\nb';\r\nimport { b } from './b.js';\r\n"), [
+    { specifier: './b.js', names: ['b'] },
+  ]);
+  assert.throws(() => imports("import { a } from './a.js';\nconst s = 'oops"), { message: 'line 2: Unterminated string literal.' });
+});
+```
+
+```bash red
+node --test --test-name-pattern='^imports: ' tests/unit/playground-snapshot.test.mjs
+```
+
+```expected
+✖ imports: a statement anywhere on its line, and a regex literal anywhere
+```
+
+With the three changed assertions in place, `imports: each static, re-exported and dynamic import with the names it takes` fails too, on the `import (\n` assertion (the old lexer does not throw).
+
+**Precondition.** Built on `capture-source-fixtures` at the commit that records Josh's approval of this amendment, or later, and before Milestone 2 starts.
+
+**Checks.** The red command gives 2 pass. `node --test tests/unit/playground-snapshot.test.mjs` passes. `imports()` gives the same result as before on every `.js` and `.mjs` file under `tests/fixtures/`, `playground/` and `src/`. `npm run test:unit` gives one more pass than before the amendment, and `npm run test:browser` (check job) is unchanged.
+
+**Counts.** Amendment 1 adds one unit test from Milestone 1's end on. The plan's counts become 258 unit at Milestone 1's end, 283 at Milestone 2's, and 285 at Milestone 3's and 4's. Browser counts are unchanged.
+
+**Commit.** `fix(capture): read a file's imports with the TypeScript parser`, staging the two files above.

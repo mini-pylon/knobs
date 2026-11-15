@@ -3,7 +3,7 @@
 // from the stand-in checkout; nothing here reads a real project.
 import test, { describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { snapshot } from '../../playground/adapters/common.mjs';
@@ -48,6 +48,30 @@ describe('source errors stay on the source prefix', { concurrency: 1 }, () => {
       assert.doesNotMatch(text, /knobs playground/);
     } finally {
       await served.close();
+    }
+  });
+
+  test('a symlinked captures folder serves the chat stub for src/main.js', async () => {
+    const root = mkdtempSync(join(repo, 'tests', '.tmp', 'serve-'));
+    const real = join(root, 'real');
+    const source = join(real, 'wings-vdb', 'source');
+    await snapshot(wingsVdb, checkout, source);
+    const link = join(root, 'link');
+    symlinkSync(real, link);
+    const drafts = join(root, 'drafts');
+    const fonts = join(root, 'fonts');
+    mkdirSync(drafts);
+    mkdirSync(fonts);
+    const site = await servePlayground({ drafts, captures: link, fonts, logLevel: 'error' });
+    try {
+      const response = await fetch(`${site.url}captures/wings-vdb/source/src/main.js`);
+      const text = await response.text();
+      assert.equal(response.status, 200, text.slice(0, 300));
+      assert.match(text, /stubs\/chat\.js/);
+      assert.doesNotMatch(text, /must not reach the fixture/);
+    } finally {
+      await site.close();
+      rmSync(root, { recursive: true, force: true });
     }
   });
 });

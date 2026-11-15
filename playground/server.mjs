@@ -12,7 +12,7 @@
 //
 // allowedHosts names the hostnames a proxy in front may use (Vite refuses
 // any other than localhost); serve.mjs takes them as --allow-host.
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { aliases, repo, serve } from '../tests/browser/lib/harness.mjs';
 import * as wingsVdb from './adapters/wings-vdb.mjs';
@@ -86,11 +86,14 @@ function draftPlugin(drafts) {
 }
 
 export async function servePlayground({ host = '127.0.0.1', port = 0, drafts, captures, fonts, logLevel = 'info', allowedHosts = [] } = {}) {
-  const draftsDir = resolve(drafts ?? process.env.KNOBS_DRAFTS ?? join(repo, 'playground', 'drafts'));
-  const capturesDir = resolve(captures ?? process.env.KNOBS_CAPTURES ?? join(repo, 'playground', 'captures'));
+  const draftsResolved = resolve(drafts ?? process.env.KNOBS_DRAFTS ?? join(repo, 'playground', 'drafts'));
+  const capturesResolved = resolve(captures ?? process.env.KNOBS_CAPTURES ?? join(repo, 'playground', 'captures'));
+  mkdirSync(draftsResolved, { recursive: true });
+  mkdirSync(capturesResolved, { recursive: true });
+  // Real paths, so a symlinked captures folder matches Vite's real importer and fs.allow.
+  const draftsDir = realpathSync(draftsResolved);
+  const capturesDir = realpathSync(capturesResolved);
   const fontsDir = resolve(fonts ?? process.env.KNOBS_WINGS_FONTS ?? join(wingsVdb.defaultCheckout, 'public', 'fonts'));
-  mkdirSync(draftsDir, { recursive: true });
-  mkdirSync(capturesDir, { recursive: true });
   const site = await serve(join(repo, 'playground'), {
     cacheDir: join(repo, 'tests', '.tmp', 'playground-vite'),
     logLevel,
@@ -101,7 +104,7 @@ export async function servePlayground({ host = '127.0.0.1', port = 0, drafts, ca
       fixturesPlugin({ captures: capturesDir, fonts: fontsDir, allowedHosts, logLevel }),
     ],
     resolve: { alias: [...aliases(), { find: '@drafts', replacement: draftsDir }, { find: '@captures', replacement: capturesDir }], dedupe: ['react', 'react-dom'] },
-    server: { host, port, strictPort: port !== 0, allowedHosts, fs: { allow: [repo, draftsDir, capturesDir] } },
+    server: { host, port, strictPort: port !== 0, allowedHosts, fs: { allow: [realpathSync(repo), draftsDir, capturesDir] } },
   });
   return { ...site, captures: capturesDir };
 }

@@ -95,6 +95,29 @@ test('imports: each static, re-exported and dynamic import with the names it tak
   ]);
   assert.deepEqual(imports("const s = `\nimport './nope.js';\n`;"), []);
   assert.doesNotThrow(() => imports("import (\n"));
+  // A quote, a comment marker or a slash inside a regex literal is not a string or a comment.
+  assert.deepEqual(imports("const q = /['\"]/;\nimport { b } from './b.js';\nconst m = import('./dyn.js');"), [
+    { specifier: './b.js', names: ['b'] },
+    { specifier: './dyn.js', names: [] },
+  ]);
+  assert.deepEqual(imports("s.replace(/'/g, '');\nimport { b } from './b.js';"), [
+    { specifier: './b.js', names: ['b'] },
+  ]);
+  assert.deepEqual(imports("const r = /a\\/*/;\nimport { b } from './b.js';"), [
+    { specifier: './b.js', names: ['b'] },
+  ]);
+  assert.deepEqual(imports("const r = /\\/\\//; import('./dyn.js');"), [
+    { specifier: './dyn.js', names: [] },
+  ]);
+  // Division is not a regex, so the import after it stays.
+  assert.deepEqual(imports("const x = a / b; const y = c / d;\nimport { b } from './b.js';"), [
+    { specifier: './b.js', names: ['b'] },
+  ]);
+  assert.throws(() => imports("const s = 'oops\nimport { b } from './b.js';"), /unterminated string on line 1/);
+  // `from` is a binding name unless a quoted specifier follows it.
+  assert.deepEqual(imports("import from from './f.js';"), [
+    { specifier: './f.js', names: ['default'] },
+  ]);
 });
 
 test('stub: the chat.js stub is a thread that stays empty, with what main.js reads from it', () => {

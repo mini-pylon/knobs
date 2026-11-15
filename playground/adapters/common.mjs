@@ -110,16 +110,35 @@ function nextLine(code, i) {
   return nl === -1 ? code.length : nl + 1;
 }
 
-// Comments, string contents and template contents become spaces, so a match
-// never sees them. Quote marks stay, and the specifier text is read from
-// the original at the same index. `${…}` is code again.
+// A `/` after one of these is a regex literal: the character cannot end an
+// expression. `/` itself is not here, so `a / b` stays division.
+const CANNOT_END = new Set(['(', ',', '=', ':', '[', '!', '&', '|', '?', '{', '}', ';', '+', '-', '*', '%', '<', '>', '~', '^']);
+const REGEX_KEYWORD = new Set(['return', 'typeof', 'case', 'do', 'else', 'in', 'of', 'new', 'delete', 'void', 'throw', 'yield', 'await']);
+
+// Comments, string contents, template contents and regex contents become
+// spaces, so a match never sees them. Quote marks and the regex's own
+// slashes stay, and the specifier text is read from the original at the
+// same index. `${…}` is code again. A single- or double-quoted string that
+// meets a newline has lost its place.
 function maskNonCode(text) {
   let out = '';
   let i = 0;
+  let line = 1;
   let mode = 'code';
+  let inClass = false;
+  let prev = '';
+  let prevWord = '';
   const exprDepth = [];
-  const blank = () => { out += text[i] === '\n' ? '\n' : ' '; i++; };
-  const keep = () => { out += text[i]; i++; };
+  const advance = () => { if (text[i] === '\n') line++; i++; };
+  const blank = () => { out += text[i] === '\n' ? '\n' : ' '; advance(); };
+  const keep = () => { out += text[i]; advance(); };
+  const note = c => {
+    if (c === ' ' || c === '\t' || c === '\n' || c === '\r') return;
+    if (isIdentChar(c) && isIdentChar(prev)) prevWord += c;
+    else prevWord = isIdentChar(c) ? c : '';
+    prev = c;
+  };
+  const regexContext = () => prev === '' || CANNOT_END.has(prev) || REGEX_KEYWORD.has(prevWord);
   while (i < text.length) {
     const c = text[i];
     const n = text[i + 1];
@@ -135,30 +154,42 @@ function maskNonCode(text) {
     if (mode === 's' || mode === 'd') {
       const q = mode === 's' ? "'" : '"';
       if (c === '\\') { blank(); if (i < text.length) blank(); continue; }
-      if (c === q) { keep(); mode = 'code'; continue; }
+      if (c === '\n') throw new Error(`unterminated string on line ${line}`);
+      if (c === q) { keep(); note(c); mode = 'code'; continue; }
       blank();
       continue;
     }
     if (mode === 't') {
       if (c === '\\') { blank(); if (i < text.length) blank(); continue; }
-      if (c === '`') { keep(); mode = 'code'; continue; }
-      if (c === '$' && n === '{') { blank(); blank(); mode = 'code'; exprDepth.push(0); continue; }
+      if (c === '`') { keep(); note(c); mode = 'code'; continue; }
+      if (c === '$' && n === '{') { blank(); blank(); note('{'); mode = 'code'; exprDepth.push(0); continue; }
       blank();
       continue;
     }
-    if (exprDepth.length && c === '{') { exprDepth[exprDepth.length - 1]++; keep(); continue; }
+    if (mode === 're') {
+      if (c === '\\') { blank(); if (i < text.length) blank(); continue; }
+      if (c === '[' && !inClass) { inClass = true; blank(); continue; }
+      if (c === ']' && inClass) { inClass = false; blank(); continue; }
+      if (c === '/' && !inClass) { keep(); note(c); mode = 'code'; continue; }
+      blank();
+      continue;
+    }
+    if (exprDepth.length && c === '{') { exprDepth[exprDepth.length - 1]++; keep(); note(c); continue; }
     if (exprDepth.length && c === '}') {
       if (exprDepth[exprDepth.length - 1] === 0) { exprDepth.pop(); blank(); mode = 't'; continue; }
       exprDepth[exprDepth.length - 1]--;
       keep();
+      note(c);
       continue;
     }
     if (c === '/' && n === '/') { blank(); blank(); mode = 'line'; continue; }
     if (c === '/' && n === '*') { blank(); blank(); mode = 'block'; continue; }
-    if (c === "'") { keep(); mode = 's'; continue; }
-    if (c === '"') { keep(); mode = 'd'; continue; }
-    if (c === '`') { keep(); mode = 't'; continue; }
+    if (c === '/' && regexContext()) { keep(); note(c); mode = 're'; inClass = false; continue; }
+    if (c === "'") { keep(); note(c); mode = 's'; continue; }
+    if (c === '"') { keep(); note(c); mode = 'd'; continue; }
+    if (c === '`') { keep(); note(c); mode = 't'; continue; }
     keep();
+    note(c);
   }
   return out;
 }
@@ -202,13 +233,18 @@ function readStaticImport(code, text, i) {
     if (depth === 0 && c === '*') { sawBinding = true; j++; continue; }
     if (depth === 0 && isIdentStart(c)) {
       const word = readWord(code, j);
+      // `from` is the clause's keyword only when a quoted specifier follows.
+      // Otherwise it is a binding name (`import from from './f.js'`).
       if (word === 'from') {
-        const spec = readQuoted(text, skipWhitespace(code, j + 4));
-        if (!spec) throw new Error('import has no specifier');
-        let end = spec.end;
-        if (code[end] === ';') end++;
-        const clause = code.slice(after, j);
-        return { item: { specifier: spec.value, names: bindingNames(clause, { defaultBinding: true }) }, end };
+        const specAt = skipWhitespace(code, j + word.length);
+        if (code[specAt] === "'" || code[specAt] === '"') {
+          const spec = readQuoted(text, specAt);
+          if (!spec) throw new Error('import has no specifier');
+          let end = spec.end;
+          if (code[end] === ';') end++;
+          const clause = code.slice(after, j);
+          return { item: { specifier: spec.value, names: bindingNames(clause, { defaultBinding: true }) }, end };
+        }
       }
       sawBinding = true;
       j += word.length;
@@ -284,8 +320,8 @@ function readExportList(code, text, braceAt) {
 }
 
 // Static imports whose statement starts with `import`, then `export … from`,
-// then dynamic `import(…)`. Comments, strings and template text are not code,
-// and each statement ends at its own specifier or `;`.
+// then dynamic `import(…)`. Comments, strings, template text and regex
+// literals are not code, and each statement ends at its own specifier or `;`.
 export function imports(text) {
   const code = maskNonCode(text);
   const statics = [];

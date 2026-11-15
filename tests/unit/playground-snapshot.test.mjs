@@ -143,6 +143,20 @@ test('imports: a statement anywhere on its line, and a regex literal anywhere', 
   assert.throws(() => imports("import { a } from './a.js';\nconst s = 'oops"), { message: 'line 2: Unterminated string literal.' });
 });
 
+test('imports: a module specifier that is not a string is refused', () => {
+  for (const text of [
+    'import a from foo.bar;',
+    "import a from ('./a.js');",
+    'import a from foo;',
+    'export * from foo;',
+    'export { x } from foo();',
+    'import a from 1;',
+  ]) {
+    assert.throws(() => imports(text), { message: 'line 1: the module specifier is not a string' }, text);
+  }
+  assert.throws(() => imports('const x = 1;\nimport a from foo;'), { message: 'line 2: the module specifier is not a string' });
+});
+
 test('stub: the chat.js stub is a thread that stays empty, with what main.js reads from it', () => {
   const thread = chat.mountChatThread({ thread: null, pills: null, input: null });
   for (const name of ['empty', 'expanded']) assert.equal(typeof Object.getOwnPropertyDescriptor(thread, name).get, 'function', `${name} is a getter`);
@@ -390,6 +404,18 @@ test('wings-vdb: an import that cannot be read names the project and the file', 
     await assert.rejects(
       snapshot(wingsVdb, checkout, join(dir, 'source'), { downscale: never }),
       /wings-vdb: src\/main\.js: line \d+: 'from' expected\./,
+    );
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('wings-vdb: a module specifier that is not a string names the project and the file', async () => {
+  const dir = scratch();
+  try {
+    const checkout = copy(dir, 'wings-vdb');
+    appendFileSync(join(checkout, 'src', 'main.js'), '\nimport a from foo.bar;\n');
+    await assert.rejects(
+      snapshot(wingsVdb, checkout, join(dir, 'source'), { downscale: never }),
+      /wings-vdb: src\/main\.js: line \d+: the module specifier is not a string/,
     );
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

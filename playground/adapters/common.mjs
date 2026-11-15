@@ -102,6 +102,16 @@ function reexportedNames(node) {
   return clause.elements.map(element => (element.propertyName ?? element.name).text);
 }
 
+// `from foo` and `from foo.bar` parse with no diagnostic. `.text` is then
+// another node's text, or missing, and the line is lost.
+function stringSpecifier(sourceFile, specifier) {
+  if (!ts.isStringLiteral(specifier)) {
+    const line = sourceFile.getLineAndCharacterOfPosition(specifier.getStart(sourceFile)).line + 1;
+    throw new Error(`line ${line}: the module specifier is not a string`);
+  }
+  return specifier.text;
+}
+
 function dynamicImports(sourceFile) {
   const found = [];
   const visit = node => {
@@ -124,9 +134,9 @@ export function imports(text) {
   const reexports = [];
   for (const statement of sourceFile.statements) {
     if (ts.isImportDeclaration(statement)) {
-      statics.push({ specifier: statement.moduleSpecifier.text, names: importedNames(statement) });
+      statics.push({ specifier: stringSpecifier(sourceFile, statement.moduleSpecifier), names: importedNames(statement) });
     } else if (ts.isExportDeclaration(statement) && statement.moduleSpecifier) {
-      reexports.push({ specifier: statement.moduleSpecifier.text, names: reexportedNames(statement) });
+      reexports.push({ specifier: stringSpecifier(sourceFile, statement.moduleSpecifier), names: reexportedNames(statement) });
     }
   }
   return [...statics, ...reexports, ...dynamicImports(sourceFile)];

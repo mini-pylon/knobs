@@ -63,7 +63,11 @@ function runPython(program, args, { input, what, cwd, timeout = 120000 }) {
     } catch (error) {
       if (error.code === 'ETIMEDOUT') throw new Error(`mini-pylon: ${what}: timed out`);
       const lines = `${error.stderr ?? ''}`.trim().split(/\r?\n/).filter(line => line.trim() !== '').slice(-20);
-      throw new Error(`mini-pylon: ${what}: ${lines.join('\n') || 'Python failed'}`);
+      const why = error.code ? String(error.code)
+        : error.status != null ? `exit ${error.status}`
+        : error.signal ? `signal ${error.signal}`
+        : error.message;
+      throw new Error(`mini-pylon: ${what}: ${lines.join('\n') || why}`);
     }
   } finally {
     // Removing the temp program must not replace Python's result or its error.

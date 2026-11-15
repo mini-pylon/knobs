@@ -400,6 +400,27 @@ test('wings-vdb: a params module that cannot be loaded names the project and the
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('mini-pylon: Python that cannot start names the reason', async () => {
+  const dir = scratch();
+  const saved = process.env.PATH;
+  process.env.PATH = dir;
+  try {
+    await assert.rejects(miniPylon.read(join(dir, 'missing')), /mini-pylon: reading the schema: ENOENT$/);
+  } finally {
+    process.env.PATH = saved;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('mini-pylon: Python that exits with no output names the status', async () => {
+  const dir = scratch();
+  try {
+    const checkout = copy(dir, 'mini-pylon');
+    writeFileSync(join(checkout, 'tools', 'scene_params.py'), 'import sys\nsys.exit(3)\n');
+    await assert.rejects(miniPylon.read(checkout), /mini-pylon: reading the schema: exit 3$/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('mini-pylon: a Python failure while reading the schema names the step and leaves the program out', async () => {
   const dir = scratch();
   try {

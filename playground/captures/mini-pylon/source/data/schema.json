@@ -1,0 +1,455 @@
+{
+  "groups": [
+    {
+      "name": "ground",
+      "about": "the surface the pylon stands on",
+      "vars": [
+        {
+          "key": "surface",
+          "type": "choice",
+          "default": "asphalt",
+          "about": "asphalt road edge, concrete slab, or a seamless studio sweep",
+          "choices": [
+            "asphalt",
+            "concrete",
+            "studio"
+          ]
+        },
+        {
+          "key": "wear",
+          "type": "number",
+          "default": 0.8,
+          "about": "asphalt and concrete: how blotchy and worn the surface is",
+          "min": 0,
+          "max": 1.5,
+          "step": 0.05
+        },
+        {
+          "key": "wetness",
+          "type": "number",
+          "default": 0,
+          "about": "darkens and glosses the whole ground, as after rain",
+          "min": 0,
+          "max": 1,
+          "step": 0.05
+        },
+        {
+          "key": "puddle",
+          "type": "toggle",
+          "default": 1,
+          "about": "a shallow puddle in front of the pylon"
+        },
+        {
+          "key": "puddle_size",
+          "type": "number",
+          "default": 1,
+          "about": "puddle size, relative to the default",
+          "min": 0.3,
+          "max": 3,
+          "step": 0.05
+        },
+        {
+          "key": "puddle_toward",
+          "type": "number",
+          "default": 0.52,
+          "about": "puddle distance from the pylon toward the camera (m)",
+          "min": -1,
+          "max": 1.5,
+          "step": 0.02
+        },
+        {
+          "key": "puddle_across",
+          "type": "number",
+          "default": 0.12,
+          "about": "puddle offset across the view (m, + is right)",
+          "min": -1.5,
+          "max": 1.5,
+          "step": 0.02
+        },
+        {
+          "key": "line",
+          "type": "toggle",
+          "default": 1,
+          "about": "a painted line between the pylon and the curb"
+        },
+        {
+          "key": "line_color",
+          "type": "choice",
+          "default": "yellow",
+          "about": "painted line colour",
+          "choices": [
+            "yellow",
+            "white"
+          ]
+        },
+        {
+          "key": "line_toward",
+          "type": "number",
+          "default": -0.52,
+          "about": "line distance from the pylon (m, - is away from the camera)",
+          "min": -1.2,
+          "max": 1.4,
+          "step": 0.02
+        },
+        {
+          "key": "crack",
+          "type": "toggle",
+          "default": 1,
+          "about": "a sealed crack running across the frame"
+        },
+        {
+          "key": "patch",
+          "type": "toggle",
+          "default": 1,
+          "about": "asphalt only: a patched rectangle of newer asphalt"
+        },
+        {
+          "key": "joints",
+          "type": "toggle",
+          "default": 1,
+          "about": "concrete only: saw-cut joints between slabs"
+        },
+        {
+          "key": "tone",
+          "type": "number",
+          "default": 0.75,
+          "about": "studio only: sweep brightness, dark to light",
+          "min": 0,
+          "max": 1,
+          "step": 0.05
+        }
+      ]
+    },
+    {
+      "name": "clutter",
+      "about": "loose things on and around the ground",
+      "vars": [
+        {
+          "key": "gravel",
+          "type": "number",
+          "default": 520,
+          "about": "number of loose stones",
+          "min": 0,
+          "max": 1500,
+          "step": 10
+        },
+        {
+          "key": "leaves",
+          "type": "number",
+          "default": 6,
+          "about": "number of dry leaves",
+          "min": 0,
+          "max": 30,
+          "step": 1
+        },
+        {
+          "key": "curb",
+          "type": "toggle",
+          "default": 1,
+          "about": "concrete curb and sidewalk behind the pylon (not in the studio)"
+        },
+        {
+          "key": "curb_distance",
+          "type": "number",
+          "default": 0.95,
+          "about": "how far behind the pylon the curb runs (m)",
+          "min": 0.5,
+          "max": 2.5,
+          "step": 0.05
+        }
+      ]
+    },
+    {
+      "name": "light",
+      "about": "sun, sky and a street lamp",
+      "vars": [
+        {
+          "key": "world",
+          "type": "choice",
+          "default": "sky",
+          "about": "physical sky, or a plain grey studio surround",
+          "choices": [
+            "sky",
+            "studio"
+          ]
+        },
+        {
+          "key": "sun_elevation",
+          "type": "number",
+          "default": 16,
+          "about": "sun height above the horizon (degrees)",
+          "min": 1,
+          "max": 85,
+          "step": 1
+        },
+        {
+          "key": "sun_azimuth",
+          "type": "number",
+          "default": -18.4,
+          "about": "sun direction around the scene (degrees)",
+          "min": -180,
+          "max": 180,
+          "step": 0.5
+        },
+        {
+          "key": "sun_strength",
+          "type": "number",
+          "default": 5.5,
+          "about": "sunlight strength; 0 for no sun",
+          "min": 0,
+          "max": 15,
+          "step": 0.1
+        },
+        {
+          "key": "sun_warmth",
+          "type": "number",
+          "default": 0.5,
+          "about": "sunlight colour, white to deep amber",
+          "min": 0,
+          "max": 1,
+          "step": 0.05
+        },
+        {
+          "key": "sun_softness",
+          "type": "number",
+          "default": 1.2,
+          "about": "sun size (degrees): larger gives softer shadows, like haze or a softbox",
+          "min": 0.2,
+          "max": 30,
+          "step": 0.2
+        },
+        {
+          "key": "sky_fill",
+          "type": "number",
+          "default": 0.1,
+          "about": "how much the sky lights the scene",
+          "min": 0,
+          "max": 1.5,
+          "step": 0.01
+        },
+        {
+          "key": "sky_reflect",
+          "type": "number",
+          "default": 0.32,
+          "about": "how bright the sky looks in reflections (wet ground, puddle)",
+          "min": 0,
+          "max": 2,
+          "step": 0.01
+        },
+        {
+          "key": "haze",
+          "type": "number",
+          "default": 2,
+          "about": "dust in the air: warmer, flatter sky",
+          "min": 0,
+          "max": 10,
+          "step": 0.1
+        },
+        {
+          "key": "lamp",
+          "type": "number",
+          "default": 0,
+          "about": "street lamp above and behind the pylon (W); 0 for off",
+          "min": 0,
+          "max": 20000,
+          "step": 100
+        },
+        {
+          "key": "lamp_warmth",
+          "type": "number",
+          "default": 0.8,
+          "about": "street lamp colour, white to sodium orange",
+          "min": 0,
+          "max": 1,
+          "step": 0.05
+        }
+      ]
+    },
+    {
+      "name": "camera",
+      "about": "where the camera stands and its lens",
+      "vars": [
+        {
+          "key": "orbit",
+          "type": "number",
+          "default": 35,
+          "about": "camera direction around the pylon (degrees); the scene stays put",
+          "min": 0,
+          "max": 360,
+          "step": 1
+        },
+        {
+          "key": "height",
+          "type": "number",
+          "default": 30,
+          "about": "camera angle above the ground (degrees)",
+          "min": 2,
+          "max": 85,
+          "step": 1
+        },
+        {
+          "key": "lens",
+          "type": "number",
+          "default": 85,
+          "about": "focal length (mm, full frame)",
+          "min": 24,
+          "max": 200,
+          "step": 1
+        },
+        {
+          "key": "fstop",
+          "type": "number",
+          "default": 1.8,
+          "about": "aperture: lower blurs the background more",
+          "min": 1.2,
+          "max": 22,
+          "step": 0.1
+        },
+        {
+          "key": "fill",
+          "type": "number",
+          "default": 0.8,
+          "about": "how much of the frame the pylon fills",
+          "min": 0.2,
+          "max": 0.95,
+          "step": 0.01
+        }
+      ]
+    },
+    {
+      "name": "pylon",
+      "about": "colours and weathering; the shape is fixed",
+      "vars": [
+        {
+          "key": "base",
+          "type": "choice",
+          "default": "yellow",
+          "about": "base treatment",
+          "choices": [
+            "yellow",
+            "black",
+            "trim"
+          ]
+        },
+        {
+          "key": "body",
+          "type": "color",
+          "default": "#1F4BFF",
+          "about": "cone colour"
+        },
+        {
+          "key": "weathering",
+          "type": "number",
+          "default": 1,
+          "about": "grime, dust, streaks and scuffs, relative to the default",
+          "min": 0,
+          "max": 2,
+          "step": 0.05
+        },
+        {
+          "key": "stripe_width",
+          "type": "number",
+          "default": 1,
+          "about": "white stripe width about each stripe's centre; 1 is the model's",
+          "min": 0.4,
+          "max": 2,
+          "step": 0.05
+        }
+      ]
+    },
+    {
+      "name": "render",
+      "about": "preview quality (finals use /render)",
+      "vars": [
+        {
+          "key": "preview_size",
+          "type": "number",
+          "default": 480,
+          "about": "preview width and height (px)",
+          "min": 240,
+          "max": 1080,
+          "step": 60
+        },
+        {
+          "key": "preview_samples",
+          "type": "number",
+          "default": 24,
+          "about": "preview samples: more is cleaner and slower",
+          "min": 4,
+          "max": 256,
+          "step": 4
+        }
+      ]
+    }
+  ],
+  "presets": {
+    "afternoon": {
+      "about": "late-afternoon sun at the road edge (the default)",
+      "values": {}
+    },
+    "overcast": {
+      "about": "flat grey daylight, damp ground",
+      "values": {
+        "light.world": "studio",
+        "light.sun_elevation": 50,
+        "light.sun_strength": 0.6,
+        "light.sun_softness": 30,
+        "light.sun_warmth": 0.1,
+        "light.sky_fill": 0.45,
+        "light.sky_reflect": 0.55,
+        "ground.wetness": 0.35
+      }
+    },
+    "dusk": {
+      "about": "sun on the horizon, long amber light",
+      "values": {
+        "light.sun_elevation": 4,
+        "light.sun_strength": 2.5,
+        "light.sun_warmth": 0.9,
+        "light.sky_fill": 0.12,
+        "light.sky_reflect": 0.5,
+        "light.haze": 4
+      }
+    },
+    "wet-night": {
+      "about": "rain-soaked road under a sodium street lamp",
+      "values": {
+        "light.sun_strength": 0,
+        "light.sky_fill": 0.005,
+        "light.sky_reflect": 0.02,
+        "light.lamp": 1200,
+        "light.lamp_warmth": 0.85,
+        "ground.wetness": 0.9,
+        "ground.puddle_size": 1.8
+      }
+    },
+    "concrete": {
+      "about": "concrete slab with a white line, afternoon sun",
+      "values": {
+        "ground.surface": "concrete",
+        "ground.line_color": "white",
+        "clutter.gravel": 120,
+        "clutter.leaves": 3
+      }
+    },
+    "studio": {
+      "about": "seamless studio sweep, soft key light",
+      "values": {
+        "ground.surface": "studio",
+        "light.world": "studio",
+        "ground.puddle": 0,
+        "clutter.gravel": 0,
+        "clutter.leaves": 0,
+        "clutter.curb": 0,
+        "light.sun_elevation": 50,
+        "light.sun_azimuth": -40,
+        "light.sun_strength": 3,
+        "light.sun_softness": 14,
+        "light.sun_warmth": 0.1,
+        "light.sky_fill": 0.6,
+        "light.sky_reflect": 0.6,
+        "camera.height": 20
+      }
+    }
+  }
+}

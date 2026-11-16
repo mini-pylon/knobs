@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#78879c">
+  <title>Wings</title>
+  <link rel="icon" href="data:,">
+  <!-- Hidden until style.css (loaded by the script) takes over, so the input never flashes unstyled. -->
+  <style>.chat { visibility: hidden; }</style>
+</head>
+<body>
+  <div class="sky"><canvas id="cloud" role="img" aria-label="Clouds forming into Wings objects as you scroll."></canvas><img class="fallback" src="/cloud-fallback.svg" alt="A static cloud shaped like the wings wordmark."></div>
+  <main aria-hidden="true"></main>
+  <div id="view-tag" hidden></div>
+  <footer aria-live="polite" aria-atomic="true"><span id="model-name">Wings</span><span id="model-text"></span><button id="chat-toggle" type="button" aria-expanded="false" aria-controls="chat" aria-label="Ask the agent">⌘K</button><button id="dive-return" type="button" aria-keyshortcuts="Escape" tabindex="-1">esc to return</button><nav id="chat-hints" aria-label="Commands" inert></nav></footer>
+  <section id="detail" aria-live="polite" hidden></section>
+  <section id="chat" class="chat" aria-label="Agent chat" inert>
+    <form><span class="chat-prompt" aria-hidden="true">›</span><input type="text" name="message" autocomplete="off" spellcheck="false" aria-label="Message the agent, or type / for commands"></form>
+    <div class="chat-thread" aria-live="polite"></div>
+    <div class="chat-pills" role="group" aria-label="Options"></div>
+  </section>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

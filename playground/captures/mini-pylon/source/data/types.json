@@ -1,0 +1,180 @@
+{
+  "ground.surface": {
+    "default": "str"
+  },
+  "ground.wear": {
+    "default": "float",
+    "min": "int",
+    "max": "float"
+  },
+  "ground.wetness": {
+    "default": "float",
+    "min": "int",
+    "max": "int"
+  },
+  "ground.puddle": {
+    "default": "int"
+  },
+  "ground.puddle_size": {
+    "default": "float",
+    "min": "float",
+    "max": "int"
+  },
+  "ground.puddle_toward": {
+    "default": "float",
+    "min": "int",
+    "max": "float"
+  },
+  "ground.puddle_across": {
+    "default": "float",
+    "min": "float",
+    "max": "float"
+  },
+  "ground.line": {
+    "default": "int"
+  },
+  "ground.line_color": {
+    "default": "str"
+  },
+  "ground.line_toward": {
+    "default": "float",
+    "min": "float",
+    "max": "float"
+  },
+  "ground.crack": {
+    "default": "int"
+  },
+  "ground.patch": {
+    "default": "int"
+  },
+  "ground.joints": {
+    "default": "int"
+  },
+  "ground.tone": {
+    "default": "float",
+    "min": "int",
+    "max": "int"
+  },
+  "clutter.gravel": {
+    "default": "int",
+    "min": "int",
+    "max": "int"
+  },
+  "clutter.leaves": {
+    "default": "int",
+    "min": "int",
+    "max": "int"
+  },
+  "clutter.curb": {
+    "default": "int"
+  },
+  "clutter.curb_distance": {
+    "default": "float",
+    "min": "float",
+    "max": "float"
+  },
+  "light.world": {
+    "default": "str"
+  },
+  "light.sun_elevation": {
+    "default": "int",
+    "min": "int",
+    "max": "int"
+  },
+  "light.sun_azimuth": {
+    "default": "float",
+    "min": "int",
+    "max": "int"
+  },
+  "light.sun_strength": {
+    "default": "float",
+    "min": "int",
+    "max": "int"
+  },
+  "light.sun_warmth": {
+    "default": "float",
+    "min": "int",
+    "max": "int"
+  },
+  "light.sun_softness": {
+    "default": "float",
+    "min": "float",
+    "max": "int"
+  },
+  "light.sky_fill": {
+    "default": "float",
+    "min": "int",
+    "max": "float"
+  },
+  "light.sky_reflect": {
+    "default": "float",
+    "min": "int",
+    "max": "int"
+  },
+  "light.haze": {
+    "default": "float",
+    "min": "int",
+    "max": "int"
+  },
+  "light.lamp": {
+    "default": "int",
+    "min": "int",
+    "max": "int"
+  },
+  "light.lamp_warmth": {
+    "default": "float",
+    "min": "int",
+    "max": "int"
+  },
+  "camera.orbit": {
+    "default": "int",
+    "min": "int",
+    "max": "int"
+  },
+  "camera.height": {
+    "default": "int",
+    "min": "int",
+    "max": "int"
+  },
+  "camera.lens": {
+    "default": "int",
+    "min": "int",
+    "max": "int"
+  },
+  "camera.fstop": {
+    "default": "float",
+    "min": "float",
+    "max": "int"
+  },
+  "camera.fill": {
+    "default": "float",
+    "min": "float",
+    "max": "float"
+  },
+  "pylon.base": {
+    "default": "str"
+  },
+  "pylon.body": {
+    "default": "str"
+  },
+  "pylon.weathering": {
+    "default": "float",
+    "min": "int",
+    "max": "int"
+  },
+  "pylon.stripe_width": {
+    "default": "float",
+    "min": "float",
+    "max": "int"
+  },
+  "render.preview_size": {
+    "default": "int",
+    "min": "int",
+    "max": "int"
+  },
+  "render.preview_samples": {
+    "default": "int",
+    "min": "int",
+    "max": "int"
+  }
+}

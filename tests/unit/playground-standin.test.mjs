@@ -94,6 +94,25 @@ for (const [i, about] of ['the defaults', 'a float-bound clamp', 'an int-bound c
   });
 }
 
+test('a fractional preview size and sample count are truncated toward zero', async () => {
+  const posted = await post(`${pylon.url}/api/render`, {
+    kind: 'preview',
+    values: { 'render.preview_size': 250.5, 'render.preview_samples': 10.9 },
+  });
+  assert.equal(posted.status, 200);
+  const job = await posted.json();
+  const done = await getJson(`${pylon.url}/api/jobs/${job.id}`);
+  assert.equal(done.state, 'done');
+  assert.equal(done.size, 250);
+  assert.equal(done.samples, 10);
+  const swatchResponse = await fetch(`${pylon.url}${done.url}`);
+  assert.equal(swatchResponse.status, 200);
+  assert.equal(swatchResponse.headers.get('content-type'), 'image/png');
+  const png = decodePng(Buffer.from(await swatchResponse.arrayBuffer()));
+  assert.equal(png.width, 250);
+  assert.equal(png.height, 250);
+});
+
 test('a failed final whose values are the defaults does not end a defaults preview with no picture', async () => {
   const copy = mkdtempSync(join(repo, 'tests', '.tmp', 'finals-'));
   cpSync(source, copy, { recursive: true });

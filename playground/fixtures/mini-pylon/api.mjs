@@ -84,8 +84,10 @@ function remember(map, key, value, max) {
   while (map.size > max) map.delete(map.keys().next().value);
 }
 
+// Python's int() truncates toward zero.
 function numberValue(value) {
-  return value instanceof PyNum ? value.value : value;
+  const number = value instanceof PyNum ? value.value : value;
+  return Math.trunc(number);
 }
 
 function sameValue(left, right) {

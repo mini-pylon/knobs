@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { build } from '../../playground/adapters/common.mjs';
 import * as miniPylon from '../../playground/adapters/mini-pylon.mjs';
 import * as wingsVdb from '../../playground/adapters/wings-vdb.mjs';
-import { defaultTab, otherSideTab, PREFIXES, seedSource, SOURCES, sourceSeed, sourceUrl } from '../../playground/fixtures/source-side.js';
+import { defaultTab, openSourceTab, otherSideTab, PREFIXES, seedSource, SOURCES, sourceSeed, sourceUrl } from '../../playground/fixtures/source-side.js';
 
 const repo = fileURLToPath(new URL('../..', import.meta.url));
 const fixtures = join(repo, 'tests', 'fixtures', 'captures');
@@ -104,4 +104,37 @@ test('each project\'s source page, default tab and fixture facts', () => {
     'mini-pylon': { console: 'mini-pylon', refuses: ['finals'], fonts: false },
   });
   assert.deepEqual(PREFIXES, ['wings-vdb:', 'mini-pylon-tweak:']);
+});
+
+test('the source prefix and the fonts path live in one table', async () => {
+  const copies = [
+    'playground/fixtures/routes.mjs',
+    'playground/fixtures/wings-vdb/vite.mjs',
+    'playground/fixtures/mini-pylon/api.mjs',
+    'playground/adapters/mini-pylon.mjs',
+  ];
+  for (const file of copies) {
+    const text = readFileSync(join(repo, file), 'utf8');
+    assert.equal(text.includes('/captures/${'), false, `${file} builds the prefix`);
+    assert.equal(text.includes("'/captures/wings-vdb/source/'"), false, file);
+    assert.equal(text.includes("'/captures/wings-vdb/source'"), false, file);
+    assert.equal(text.includes("'/captures/mini-pylon/source/'"), false, file);
+    assert.equal(text.includes("'/captures/mini-pylon/source'"), false, file);
+    assert.equal(text.includes("'/captures/wings-vdb/fonts'"), false, file);
+    assert.equal(/\.replace\(\s*\/source/.test(text), false, `${file} rewrites the prefix`);
+  }
+  const home = readFileSync(join(repo, 'playground/fixtures/source-side.js'), 'utf8');
+  assert.equal(home.includes('/captures/${'), false, 'source-side.js builds the prefix');
+  const side = await import('../../playground/fixtures/source-side.js');
+  const mounts = side.SOURCE_MOUNTS;
+  assert.equal(side.sourceUrl('wings-vdb'), mounts['wings-vdb'].source);
+  assert.equal(side.sourceUrl('mini-pylon'), mounts['mini-pylon'].source);
+  assert.equal(mounts['wings-vdb'].source, '/captures/wings-vdb/source/');
+  assert.equal(mounts['mini-pylon'].source, '/captures/mini-pylon/source/');
+  assert.equal(mounts['wings-vdb'].fonts, '/captures/wings-vdb/fonts');
+  assert.equal(side.withoutTrailingSlash(mounts['mini-pylon'].source), '/captures/mini-pylon/source');
+  // page.evaluate sends these functions' text alone.
+  for (const fn of [seedSource, openSourceTab]) {
+    assert.doesNotMatch(fn.toString(), /\bSOURCE_MOUNTS\b|\bsourceUrl\b|\bwithoutTrailingSlash\b/);
+  }
 });

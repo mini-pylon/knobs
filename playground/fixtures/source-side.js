@@ -8,8 +8,21 @@ export const SOURCES = {
   'mini-pylon': { console: 'mini-pylon', refuses: ['finals'], fonts: false },
 };
 
+// Each project's source prefix, with its trailing slash, and the fonts-state
+// path. The form without the slash is withoutTrailingSlash of this one.
+export const SOURCE_MOUNTS = {
+  'wings-vdb': { source: '/captures/wings-vdb/source/', fonts: '/captures/wings-vdb/fonts' },
+  'mini-pylon': { source: '/captures/mini-pylon/source/', fonts: null },
+};
+
+export function withoutTrailingSlash(path) {
+  return path.endsWith('/') ? path.slice(0, -1) : path;
+}
+
 export function sourceUrl(project) {
-  return `/captures/${project}/source/`;
+  const mount = SOURCE_MOUNTS[project];
+  if (!mount) throw new Error(`no source side for ${project}`);
+  return mount.source;
 }
 
 export function knobsConsole(project) {

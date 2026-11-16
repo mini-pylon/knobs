@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { valueSet } from './common.mjs';
+import { sourceUrl } from '../fixtures/source-side.js';
 import { pngSize } from '../png.mjs';
 
 export const name = 'mini-pylon';
@@ -23,7 +24,7 @@ export const dev = {
 };
 
 // Where a captured final's picture is served from.
-export const RENDERS_URL = '/captures/mini-pylon/source/renders/';
+export const RENDERS_URL = `${sourceUrl('mini-pylon')}renders/`;
 
 // The tweak page, at the source root. tweak.js is a classic script: no imports.
 export const vendor = [

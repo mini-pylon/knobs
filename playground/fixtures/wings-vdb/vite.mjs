@@ -6,8 +6,9 @@ import { dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
 import { stubs } from '../../adapters/wings-vdb.mjs';
+import { sourceUrl } from '../source-side.js';
 
-export const BASE = '/captures/wings-vdb/source/';
+export const BASE = sourceUrl('wings-vdb');
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 function bare(id) {

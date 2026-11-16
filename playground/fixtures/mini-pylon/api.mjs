@@ -5,8 +5,9 @@ import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { encodePng } from '../../png.mjs';
 import { dumps, loads, PyNum, resolve, typedVars } from './python.mjs';
+import { sourceUrl, withoutTrailingSlash } from '../source-side.js';
 
-export const PREFIX = '/captures/mini-pylon/source';
+export const PREFIX = withoutTrailingSlash(sourceUrl('mini-pylon'));
 export const FINALS_REFUSED = 'finals are not made in the knobs fixture';
 
 const BODY_LIMIT = 1_000_000;

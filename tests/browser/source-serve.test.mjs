@@ -153,7 +153,9 @@ test('the source pages and their root paths answer a proxy\'s allowed host, and 
     for (const path of ['/captures/wings-vdb/source/src/main.js', '/wings-wide.svg', '/api/schema', '/captures/mini-pylon/source/']) {
       assert.equal((await call(path, 'knobs.example.test')).status, 200, path);
     }
-    assert.equal((await call('/captures/wings-vdb/source/', 'evil.example')).status, 403);
+    const refused = await call('/captures/wings-vdb/source/', 'evil.example');
+    assert.equal(refused.status, 403);
+    assert.equal(refused.text, 'Blocked request. This host ("evil.example") is not allowed.\nTo allow this host, add "evil.example" to `server.allowedHosts` in vite.config.js.');
   } finally { await proxied.close(); }
 });
 

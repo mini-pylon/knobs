@@ -361,7 +361,68 @@ test('the stand-in serves the page\'s own files and nothing outside them', async
     assert.equal(await response.text(), readFileSync(join(source, file), 'utf8'));
   }
   for (const path of ['/data/schema.json', '/renders/..%2Fdata%2Fschema.json', '/renders/nope.png', '/out/previews/nope.png']) {
-    assert.equal((await fetch(`${pylon.url}/captures/mini-pylon/source${path}`)).status, 404, path);
+    const response = await fetch(`${pylon.url}/captures/mini-pylon/source${path}`);
+    assert.equal(response.status, 404, path);
+    assert.deepEqual(await response.json(), { error: 'not found' }, path);
+  }
+});
+
+test('HEAD answers with GET\'s status and headers and no body', async () => {
+  for (const url of [`${pylon.url}/api/schema`, `${pylon.url}/captures/mini-pylon/source/`]) {
+    const get = await fetch(url);
+    const head = await fetch(url, { method: 'HEAD' });
+    assert.equal(head.status, get.status, url);
+    for (const name of ['content-type', 'content-length', 'cache-control']) {
+      assert.equal(head.headers.get(name), get.headers.get(name), `${url} ${name}`);
+    }
+    assert.equal(await head.text(), '', url);
+    await get.arrayBuffer();
+  }
+});
+
+test('a method other than GET, HEAD or POST is refused', async () => {
+  for (const url of [`${pylon.url}/api/schema`, `${pylon.url}/captures/mini-pylon/source/`]) {
+    const response = await fetch(url, { method: 'PUT' });
+    assert.equal(response.status, 405, url);
+    assert.deepEqual(await response.json(), { error: 'method not allowed' }, url);
+  }
+});
+
+test('a body that is not JSON, not an object, or whose values are not an object is refused with that text', async () => {
+  const notJson = await post(`${pylon.url}/api/render`, '{');
+  assert.equal(notJson.status, 400);
+  assert.deepEqual(await notJson.json(), { error: 'the body is not JSON' });
+  const notObject = await post(`${pylon.url}/api/render`, '[]');
+  assert.equal(notObject.status, 400);
+  assert.deepEqual(await notObject.json(), { error: 'the body must be a JSON object' });
+  const values = await post(`${pylon.url}/api/render`, { kind: 'preview', values: [] });
+  assert.equal(values.status, 400);
+  assert.deepEqual(await values.json(), { error: 'values must be an object' });
+});
+
+test('only the newest 100 jobs and the newest 40 swatches are kept', async () => {
+  const api = standIn(source);
+  const local = await mount([['/api', api.api], ['/captures/mini-pylon/source', api.files]]);
+  try {
+    const made = [];
+    for (let i = 0; i < 101; i++) {
+      const response = await post(`${local.url}/api/render`, { kind: 'preview', values: { 'ground.wetness': (i + 1) / 1000 } });
+      assert.equal(response.status, 200, String(i));
+      const job = await response.json();
+      made.push(await getJson(`${local.url}/api/jobs/${job.id}`));
+    }
+    const oldest = await fetch(`${local.url}/api/jobs/${made[0].id}`);
+    assert.equal(oldest.status, 404);
+    assert.deepEqual(await oldest.json(), { error: 'no such job' });
+    assert.equal((await getJson(`${local.url}/api/jobs/${made[1].id}`)).id, made[1].id);
+    assert.equal((await fetch(`${local.url}${made[0].url}`)).status, 404);
+    assert.equal((await fetch(`${local.url}${made[60].url}`)).status, 404);
+    const kept = await fetch(`${local.url}${made[61].url}`);
+    assert.equal(kept.status, 200);
+    assert.equal(kept.headers.get('content-type'), 'image/png');
+    assert.equal((await fetch(`${local.url}${made[100].url}`)).status, 200);
+  } finally {
+    local.server.close();
   }
 });
 

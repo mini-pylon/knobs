@@ -59,7 +59,9 @@ test('POST /__wings/defaults answers what the drawer prints as a refusal, and /_
   assert.equal(DEFAULTS_REFUSED, 'defaults are not saved in the knobs fixture');
   assert.equal((await post(`${wings.url}/__wings/report`, { storage: {} })).status, 204);
   assert.equal((await fetch(`${wings.url}/__wings/defaults`)).status, 405);
-  assert.equal((await post(`${wings.url}/__wings/other`, {})).status, 404);
+  const other = await post(`${wings.url}/__wings/other`, {});
+  assert.equal(other.status, 404);
+  assert.equal(await other.text(), 'not found');
 });
 
 test('the fonts route serves the two faces from the fonts folder, and says local or fallback', async () => {
@@ -70,7 +72,12 @@ test('the fonts route serves the two faces from the fonts folder, and says local
   assert.equal(await face.text(), 'areal');
   assert.deepEqual(await getJson(`${wings.url}/fallback/captures/wings-vdb/fonts`), { fonts: 'fallback' });
   assert.equal((await fetch(`${wings.url}/fallback/fonts/ABCArealVariable.woff2`)).status, 404);
-  for (const path of ['/local/fonts/other.woff2', '/local/fonts/..%2Fsecret', '/local/fonts/']) assert.equal((await fetch(`${wings.url}${path}`)).status, 404, path);
+  for (const path of ['/local/fonts/other.woff2', '/local/fonts/..%2Fsecret', '/local/fonts/']) {
+    const response = await fetch(`${wings.url}${path}`);
+    assert.equal(response.status, 404, path);
+    const text = await response.text();
+    if (path === '/local/fonts/..%2Fsecret') assert.equal(text, 'not found');
+  }
   assert.equal(fontState(fonts), 'local');
   assert.equal(fontState(noFonts), 'fallback');
   assert.equal((await fetch(`${wings.url}/wings-wide.svg`)).headers.get('content-type'), 'image/svg+xml');

@@ -1,9 +1,12 @@
 // The playground shell: picks a scenario, frames its stage (stage.html) at a
 // chosen width, and reads the stage's window.__stage for the system views.
-// Everything that picks what is shown lives in the query (s, g, set, w,
-// view), so a view can be linked or reloaded.
+// A capture with side=source frames that project's own page instead, seeded
+// through the page's storage keys, and builds the capture pane from the
+// capture's data. Everything that picks what is shown lives in the query
+// (s, g, set, tab, w, view, side), so a view can be linked or reloaded.
 import { defineControls } from 'knobs';
-import { captureNames, draftNames, exemplarNames, JSON_KEY } from './scenarios.js';
+import { defaultTab, openSourceTab, otherSideTab, seedSource, SOURCE_MOUNTS, SOURCES, sourceSeed, sourceUrl } from './fixtures/source-side.js';
+import { captureNames, draftNames, exemplarNames, JSON_KEY, resolveScenario } from './scenarios.js';
 
 const $ = selector => document.querySelector(selector);
 const params = new URLSearchParams(location.search);
@@ -40,9 +43,22 @@ $('.count').addEventListener('change', () => go({ g: $('.count').value }));
 $('.reroll').addEventListener('click', () => go({ s: `random:${1 + Math.floor(Math.random() * 1e6)}` }));
 
 // --- stage -----------------------------------------------------------------
-const stageQuery = new URLSearchParams({ s: scenario });
-for (const key of ['g', 'tab', 'set']) if (params.get(key)) stageQuery.set(key, params.get(key));
-frame.src = `./stage.html?${stageQuery}`;
+// side=source only for a capture that has a snapshot. Resolved before the
+// frame is pointed anywhere, so the seed is written before the page starts.
+let side = 'knobs';
+let resolved = null;
+
+function frameKnobs() {
+  const stageQuery = new URLSearchParams({ s: scenario });
+  for (const key of ['g', 'tab', 'set']) if (params.get(key)) stageQuery.set(key, params.get(key));
+  frame.src = `./stage.html?${stageQuery}`;
+}
+// A capture waits until its side is known. Anything else frames at once.
+if (!scenario.startsWith('capture:')) frameKnobs();
+
+function chosenTab(capture) {
+  return params.get('tab') || defaultTab(capture);
+}
 
 function setWidth(w) {
   frame.style.width = w ? `${w}px` : '';
@@ -228,6 +244,42 @@ function renderCapture(s) {
   const where = commit ? `${repo} · ${branch} · ${commit.slice(0, 7)}${dirty ? ' · uncommitted changes' : ''}` : `${repo} · not in git`;
   const out = [el('h3', '', 'source'), el('p', '', where), el('p', 'about', `captured ${c.capturedAt}`)];
 
+  out.push(el('h3', '', 'side'));
+  const switcher = el('div', 'side-switch');
+  for (const name of ['source', 'knobs']) {
+    const button = el('button', name === side ? 'on' : '', name);
+    button.dataset.side = name;
+    if (name === 'source' && !c.vendored) button.disabled = true;
+    button.addEventListener('click', () => {
+      go({ side: name, tab: otherSideTab(c.name, c, params.get('tab'), name) ?? '' });
+    });
+    switcher.append(button);
+  }
+  out.push(switcher);
+  if (!c.vendored) {
+    out.push(el('p', '', `no source snapshot: run npm run playground:capture -- ${c.name}`));
+  } else {
+    const source = SOURCES[c.name];
+    if (!source) throw new Error(`no source side for ${c.name}`);
+    if (!Array.isArray(c.vendored.stubs)) throw new Error(`${c.name}: the snapshot lists no stubs`);
+    const stubbed = c.vendored.stubs.map(stub => stub.module).join(', ') || 'none';
+    const line = el('p', 'fixture', `fixture: snapshot of ${where} · stubbed: ${stubbed} · not in the fixture: ${source.refuses.join(', ')}`);
+    if (source.fonts) {
+      const fontsPath = SOURCE_MOUNTS[c.name]?.fonts;
+      if (!fontsPath) throw new Error(`no fonts path for ${c.name}`);
+      const fonts = el('span');
+      line.append(fonts);
+      fetch(fontsPath).then(async response => {
+        const body = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(`${fontsPath}: HTTP ${response.status}`);
+        if (body?.fonts === 'local') fonts.textContent = ' · fonts: local';
+        else if (body?.fonts === 'fallback') fonts.textContent = ' · fonts: fallback (ABC Areal is not in this checkout)';
+        else throw new Error(`${fontsPath}: unknown fonts state: ${JSON.stringify(body?.fonts)}`);
+      }).catch(error => { fonts.textContent = ` · fonts: ${error.message}`; });
+    }
+    out.push(line);
+  }
+
   out.push(el('h3', '', 'value set'));
   const picker = el('select', 'value-set');
   for (const name of Object.keys(c.valueSets)) picker.append(new Option(name, name));
@@ -272,6 +324,16 @@ function renderCapture(s) {
 const renderers = { schema: renderSchema, state: renderState, events: renderEvents, commands: renderCommands, capture: renderCapture };
 let lastKey = '';
 function render() {
+  if (side === 'source') {
+    if (!resolved?.capture) return;
+    // The capture's data does not change while the shell is open: once per view.
+    const key = `source:${current}`;
+    if (key === lastKey) return;
+    lastKey = key;
+    if (current === 'capture') views.capture.replaceChildren(...renderCapture({ capture: resolved.capture }));
+    else views[current].replaceChildren(el('p', '', 'This view describes the knobs side. Switch to knobs to see it.'));
+    return;
+  }
   const s = stage();
   if (!s) return;
   if (s.error) showError(s.error);
@@ -283,6 +345,27 @@ function render() {
 }
 
 frame.addEventListener('load', () => {
+  if (side === 'source') {
+    const capture = resolved?.capture;
+    if (!capture) return;
+    let prefix;
+    try {
+      prefix = sourceUrl(capture.name);
+    } catch (error) {
+      showError(`${capture.name}: ${error.message}`);
+      return;
+    }
+    const href = frame.contentWindow?.location?.href ?? '';
+    if (!href.includes(prefix)) return;
+    const tab = chosenTab(capture);
+    openSourceTab({ tab }, frame.contentDocument).then(() => {
+      document.body.dataset.sourceReady = tab;
+    }).catch(error => showError(`${capture.name}: ${tab}: ${error.message}`));
+    return;
+  }
+  // The empty frame fires before a capture's side is known. It is not a stage.
+  const href = frame.contentWindow?.location?.href ?? '';
+  if (!frame.src || href === 'about:blank') return;
   lastKey = '';
   const wait = setInterval(() => {
     const s = stage();
@@ -296,3 +379,32 @@ frame.addEventListener('load', () => {
 });
 setInterval(render, 300);
 showView(current);
+
+// A capture's frame waits until the scenario resolves, so a source page is
+// seeded before it loads and a failed resolve still reaches the stage.
+async function frameCapture() {
+  if (!scenario.startsWith('capture:')) return;
+  try {
+    resolved = await resolveScenario(params);
+  } catch {
+    resolved = null;
+  }
+  const capture = resolved?.capture ?? null;
+  if (!(params.get('side') === 'source' && capture?.vendored)) {
+    frameKnobs();
+    return;
+  }
+  let tab = params.get('tab') ?? '';
+  try {
+    tab = chosenTab(capture);
+    seedSource(sourceSeed(capture.name, capture, capture.set, tab));
+    side = 'source';
+    if (!edited) textarea.value = JSON.stringify(rawGroups(resolved.groups), null, 2);
+    render();
+    frame.setAttribute('src', sourceUrl(capture.name));
+  } catch (error) {
+    side = 'knobs';
+    showError(`${capture.name}: ${tab}: ${error.message}`);
+  }
+}
+void frameCapture();

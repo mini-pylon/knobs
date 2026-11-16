@@ -10,9 +10,7 @@ import { join } from 'node:path';
 import { closeAll, collectErrors, launch, newPage, repo } from './lib/harness.mjs';
 import { randomSchema } from '../../playground/random.js';
 import { servePlayground } from '../../playground/server.mjs';
-import { build } from '../../playground/adapters/common.mjs';
-import * as miniPylon from '../../playground/adapters/mini-pylon.mjs';
-import * as wingsVdb from '../../playground/adapters/wings-vdb.mjs';
+import { captureFixtures, collectPageErrors, writeCaptures } from './lib/captures.mjs';
 
 const exemplars = Object.keys(JSON.parse(readFileSync(new URL('./exemplars.json', import.meta.url), 'utf8')));
 const exemplarDir = name => join(repo, 'skills', 'knobs', 'exemplars', name);
@@ -23,29 +21,15 @@ const drafts = mkdtempSync(join(repo, 'tests', '.tmp', 'drafts-'));
 mkdirSync(join(drafts, 'curve-copy'));
 for (const file of ['controls.js', 'visual.js']) cpSync(join(exemplarDir('curve-trace'), file), join(drafts, 'curve-copy', file));
 
-// A captures folder of the test's own, built from the fixture copies of both
-// projects; wings-vdb's has one shot of its drawer.
+// A captures folder of the test's own, built from the stand-in checkouts of
+// both projects with their source snapshots (lib/captures.mjs); wings-vdb's
+// has two shots of its drawer. The fonts folder is the test's own and empty.
 const captures = mkdtempSync(join(repo, 'tests', '.tmp', 'captures-'));
-// The fonts folder is the test's own and empty.
 const fonts = mkdtempSync(join(repo, 'tests', '.tmp', 'fonts-'));
-const captureFixtures = join(repo, 'tests', 'fixtures', 'captures');
-// A 1x1 PNG.
-const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
-async function writeCaptures() {
-  const wings = await build(wingsVdb, join(captureFixtures, 'wings-vdb'), { reports: join(captureFixtures, 'wings-vdb-browsers') });
-  mkdirSync(join(captures, 'wings-vdb', 'shots'), { recursive: true });
-  writeFileSync(join(captures, 'wings-vdb', 'shots', '01-wings-vdb.png'), PNG);
-  wings.shots = [{ tab: 'wings-vdb', file: 'shots/01-wings-vdb.png' }];
-  writeFileSync(join(captures, 'wings-vdb', 'capture.json'), JSON.stringify(wings));
-  const pylon = await build(miniPylon, join(captureFixtures, 'mini-pylon'));
-  pylon.shotsSkipped = 'the dev server at http://127.0.0.1:5371/ was not answering';
-  mkdirSync(join(captures, 'mini-pylon'));
-  writeFileSync(join(captures, 'mini-pylon', 'capture.json'), JSON.stringify(pylon));
-}
 
 let site, browser;
 before(async () => {
-  await writeCaptures();
+  await writeCaptures(captures);
   site = await servePlayground({ drafts, captures, fonts, logLevel: 'error' });
   browser = await launch();
 });
@@ -366,12 +350,12 @@ test('the drawer is titled with the exemplar or draft it mounts', async () => {
 });
 
 // Captures: a project's own drawer, as capture.mjs wrote it.
-test('the stage mounts a capture titled with its project, its hidden groups without tabs', async () => {
+test('the stage mounts a capture titled knobs-<project>, its hidden groups without tabs', async () => {
   const { page, errors } = await stage('s=capture:wings-vdb');
   try {
     assert.deepEqual(errors, []);
     const labels = await tabs(page);
-    assert.equal(labels[0], 'wings-vdb');
+    assert.equal(labels[0], 'knobs-wings-vdb');
     for (const group of ['dispersal', 'scroll', 'presence', 'sunlight', 'dive']) assert.ok(labels.includes(group), `tab ${group}`);
     for (const group of ['birds', 'hover', 'opening']) assert.ok(!labels.includes(group), `no tab ${group}`);
     assert.equal(await page.evaluate(() => window.__stage.store.control('scroll.hang')), 1.18);
@@ -413,10 +397,10 @@ test('the capture view shows the source, value sets, what did not translate, and
     const text = await capture.innerText();
     for (const words of ['wings-vdb', 'captured 20', 'not in git', '/defaults', 'viz.js']) assert.ok(text.includes(words), `capture view shows ${words}:\n${text}`);
     assert.deepEqual(await capture.locator('select.value-set option').evaluateAll(o => o.map(x => x.value)), ['defaults', 'fixture01']);
-    const shot = capture.locator('figure.shot img');
+    const shot = capture.locator('figure.shot img').first();
     await shot.waitFor();
     assert.ok(await shot.evaluate(img => img.complete && img.naturalWidth === 1), 'the shot loads');
-    assert.match(await capture.locator('figure.shot figcaption').innerText(), /wings-vdb/);
+    assert.deepEqual(await capture.locator('figure.shot figcaption').allInnerTexts(), ['wings-vdb', 'dispersal']);
     // Picking a value set reloads with set= and shows what it dropped.
     await capture.locator('select.value-set').selectOption('fixture01');
     await page.waitForURL(url => new URLSearchParams(url.search).get('set') === 'fixture01');

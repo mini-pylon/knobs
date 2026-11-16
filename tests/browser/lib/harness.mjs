@@ -66,7 +66,16 @@ export async function serve(root, extra = {}) {
     if (beforeListen) await beforeListen(server);
     await server.listen();
   } catch (error) {
-    if (server) await server.close();
+    if (server) {
+      try {
+        await server.close();
+      } catch (closeError) {
+        // The start error is the one the caller handles. A close that also
+        // fails is attached, never thrown in its place.
+        if (error != null && typeof error === 'object' && error.cause == null) error.cause = closeError;
+        else if (error != null && typeof error === 'object') error.closeError = closeError;
+      }
+    }
     throw error;
   }
   const { port } = server.httpServer.address();

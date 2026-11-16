@@ -4,7 +4,7 @@
 import test, { describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { appendFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -201,4 +201,123 @@ describe('source errors stay on the source prefix', { concurrency: 1 }, () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  test('a fixture start that fails inside configureServer closes the wings Vite and closeServer is a no-op', async () => {
+    const root = mkdtempSync(join(repo, 'tests', '.tmp', 'serve-'));
+    const captures = join(root, 'captures');
+    const source = join(captures, 'wings-vdb', 'source');
+    await snapshot(wingsVdb, checkout, source);
+    assert.equal(existsSync(join(source, 'index.html')), true);
+    const fonts = join(root, 'fonts');
+    mkdirSync(fonts);
+    const script = `
+      import assert from 'node:assert/strict';
+      import { createServer } from 'node:http';
+      import { fixturesPlugin } from ${JSON.stringify(join(repo, 'playground', 'fixtures', 'routes.mjs'))};
+      const plugin = fixturesPlugin({
+        captures: ${JSON.stringify(captures)},
+        fonts: ${JSON.stringify(fonts)},
+        logLevel: 'error',
+      });
+      const httpServer = createServer();
+      let calls = 0;
+      let thrown = null;
+      const server = {
+        httpServer,
+        middlewares: {
+          use() {
+            calls += 1;
+            if (calls === 2) {
+              thrown = new Error('second mount failed');
+              throw thrown;
+            }
+          },
+        },
+      };
+      await plugin.configureServer(server);
+      assert.equal(calls, 2);
+      assert.equal(plugin.boot.error, thrown);
+      assert.equal(plugin.closeServer(), undefined);
+      console.error(thrown.message);
+      httpServer.close();
+    `;
+    try {
+      const run = await runChild(script);
+      assert.equal(run.error, null, `${run.error?.message}\n${run.stderr}`);
+      assert.match(run.stderr, /second mount failed/);
+      assert.doesNotMatch(run.stderr, /STARTED/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test('a playground start that throws inside configureServer rejects and leaves nothing listening', async () => {
+    const root = mkdtempSync(join(repo, 'tests', '.tmp', 'serve-'));
+    const captures = join(root, 'captures');
+    const source = join(captures, 'wings-vdb', 'source');
+    await snapshot(wingsVdb, checkout, source);
+    assert.equal(existsSync(join(source, 'index.html')), true);
+    const drafts = join(root, 'drafts');
+    const fonts = join(root, 'fonts');
+    mkdirSync(drafts);
+    mkdirSync(fonts);
+    // servePlayground builds its own middleware stack, so the child makes the
+    // second fixture mount throw after the wings Vite is already open.
+    const script = `
+      import { registerHooks } from 'node:module';
+      registerHooks({
+        load(url, context, nextLoad) {
+          const loaded = nextLoad(url, context);
+          if (!String(url).includes('/playground/fixtures/routes.mjs')) return loaded;
+          const source = typeof loaded.source === 'string' ? loaded.source : Buffer.from(loaded.source).toString('utf8');
+          const needle = [
+            'function mount(server, route, handler) {',
+            '  server.middlewares.use(route, seal(handler));',
+            '}',
+          ].join('\\n');
+          if (!source.includes(needle)) throw new Error('mount() shape changed');
+          const replacement = [
+            'let mounts = 0;',
+            'function mount(server, route, handler) {',
+            '  mounts += 1;',
+            "  if (mounts === 2) throw new Error('second mount failed');",
+            '  server.middlewares.use(route, seal(handler));',
+            '}',
+          ].join('\\n');
+          return { ...loaded, source: source.replace(needle, replacement) };
+        },
+      });
+      const { servePlayground } = await import(${JSON.stringify(join(repo, 'playground', 'server.mjs'))});
+      try {
+        await servePlayground({
+          host: '127.0.0.1',
+          port: 0,
+          drafts: ${JSON.stringify(drafts)},
+          captures: ${JSON.stringify(captures)},
+          fonts: ${JSON.stringify(fonts)},
+          logLevel: 'error',
+        });
+        console.error('STARTED');
+      } catch (error) {
+        console.error(error?.message ?? String(error));
+        if (error?.message !== 'second mount failed') process.exitCode = 1;
+      }
+    `;
+    try {
+      const run = await runChild(script);
+      assert.equal(run.error, null, `${run.error?.message}\n${run.stderr}`);
+      assert.match(run.stderr, /second mount failed/);
+      assert.doesNotMatch(run.stderr, /STARTED/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
+
+function runChild(script) {
+  return new Promise(resolve => {
+    execFile(process.execPath, ['--input-type=module', '-e', script], { timeout: 12000 }, (error, stdout, stderr) => {
+      resolve({ error, stdout, stderr });
+    });
+  });
+}

@@ -47,8 +47,8 @@ function capture(name, set) {
 }
 
 // The capture a capture:<name> stage mounts with its defaults, shots included.
-export async function captureOf(name) {
-  return (await capture(name, 'defaults')).capture;
+export function captureOf(name) {
+  return capture(name, 'defaults').capture;
 }
 
 export const stress = [

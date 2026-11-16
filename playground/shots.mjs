@@ -164,12 +164,19 @@ try {
     if (id.startsWith('capture:')) await shootSource(id);
   }
 
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto(`${site.url}grid.html?ids=${ids.map(encodeURIComponent).join(',')}&w=640&h=420`);
-  await page.locator('body[data-ready]').waitFor({ timeout: 60000 });
-  await page.waitForTimeout(400);
-  await page.screenshot({ path: join(out, 'grid.png'), fullPage: true });
-  console.log(join(out, 'grid.png'));
+  // The grid's source cells are live frames of the real pages, so its
+  // screenshot can stall as theirs can; the failure names the grid page.
+  const gridUrl = `${site.url}grid.html?ids=${ids.map(encodeURIComponent).join(',')}&w=640&h=420`;
+  try {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(gridUrl);
+    await page.locator('body[data-ready]').waitFor({ timeout: 60000 });
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: join(out, 'grid.png'), fullPage: true });
+    console.log(join(out, 'grid.png'));
+  } catch (error) {
+    failures.push(`grid: ${gridUrl}: ${error.message}`);
+  }
   await context.close();
 } finally {
   await closeAll(() => browser.close(), () => site.close());

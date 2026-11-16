@@ -170,7 +170,18 @@ async function main() {
   const devUrl = values.dev ?? adapter.dev.url;
 
   // One PNG per tab of the project's own drawer, as { tab, file } relative to dir.
+  // A failure names the project and the dev page, and the tab once one is open:
+  // Playwright's own message for a stalled screenshot names neither.
   async function shoot(dir) {
+    let tab = null;
+    try {
+      return await shootTabs(dir, label => { tab = label; });
+    } catch (error) {
+      throw new Error(`${project}: ${devUrl}: ${tab === null ? '' : `${tab}: `}${error.message}`, { cause: error });
+    }
+  }
+
+  async function shootTabs(dir, opened) {
     const shotBrowser = await chromium.launch({ executablePath: process.env.KNOBS_CHROMIUM || undefined, args: adapter.dev.chromiumArgs });
     try {
       const page = await shotBrowser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: Number(values.scale) });
@@ -183,6 +194,7 @@ async function main() {
       mkdirSync(join(dir, 'shots'), { recursive: true });
       const shots = [];
       for (let i = 0; i < labels.length; i++) {
+        opened(labels[i]);
         await tabs.nth(i).click();
         await page.waitForTimeout(800);
         const file = `shots/${String(i + 1).padStart(2, '0')}-${labels[i].replace(/[^\w.-]+/g, '_')}.png`;

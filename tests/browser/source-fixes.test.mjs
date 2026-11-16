@@ -9,7 +9,7 @@ import { execFile } from 'node:child_process';
 import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeAll, launch, newPage, repo } from './lib/harness.mjs';
-import { writeCaptures } from './lib/captures.mjs';
+import { captureFixtures, writeCaptures } from './lib/captures.mjs';
 import { servePlayground } from '../../playground/server.mjs';
 
 mkdirSync(join(repo, 'tests', '.tmp'), { recursive: true });
@@ -389,6 +389,58 @@ test('check-fixtures waits for a picture that draws late and does not call it bl
   assert.doesNotMatch(result.stderr, /is blank/);
   assert.match(result.stdout, /wings-vdb: \d+ tabs checked/);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
+});
+
+// capture.mjs against a stand-in for the project's dev page, whose drawer's
+// tabs show on the backtick key unless `shown` is false.
+async function captureAgainst(labels, { shown = true } = {}) {
+  const { createServer } = await import('node:http');
+  const tabs = labels.map(label => `<button class="term-tab">${label}</button>`).join('');
+  const key = shown ? `<script>addEventListener('keydown', e => { if (e.key === '\`') document.querySelector('.term-tabs').hidden = false; });</script>` : '';
+  const html = `<!doctype html><nav class="term-tabs" hidden>${tabs}</nav>${key}`;
+  const dev = createServer((req, res) => { res.setHeader('content-type', 'text/html'); res.end(html); });
+  await new Promise(resolve => dev.listen(0, '127.0.0.1', resolve));
+  const devUrl = `http://127.0.0.1:${dev.address().port}/`;
+  try {
+    const result = await runNode(
+      [join(repo, 'playground', 'capture.mjs'), 'mini-pylon', join(captureFixtures, 'mini-pylon'), '--out', temp('capture-'), '--dev', devUrl],
+      {},
+      60000,
+    );
+    return { ...result, devUrl };
+  } finally {
+    dev.close();
+  }
+}
+
+const escaped = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+test('a capture shot that fails names the project, the dev page and the tab', async () => {
+  // A label this long makes a shot file name the filesystem refuses, so the
+  // screenshot fails once its tab is open.
+  const long = 'a'.repeat(300);
+  const result = await captureAgainst(['mini-pylon', long]);
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, new RegExp(`capture failed: mini-pylon: ${escaped(result.devUrl)}: ${long}: `), result.stderr);
+});
+
+test('a capture that fails before any tab opens names the project and the dev page', { timeout: 90000 }, async () => {
+  const result = await captureAgainst(['mini-pylon', 'ground'], { shown: false });
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, new RegExp(`capture failed: mini-pylon: ${escaped(result.devUrl)}: \\S`), result.stderr);
+});
+
+test('playground:shots lists a grid shot that fails with the grid page, and does not throw', { timeout: 120000 }, async () => {
+  const out = temp('grid-fail-');
+  // A directory where grid.png goes: the grid screenshot cannot be written.
+  mkdirSync(join(out, 'grid.png'));
+  const result = await runNode(
+    [join(repo, 'playground', 'shots.mjs'), '--only', 'stress', '--out', out, '--scale', '1'],
+    shotEnv(captures),
+    110000,
+  );
+  assert.equal(result.code, 1, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stderr, /failed:\ngrid: http:\/\/127\.0\.0\.1:\d+\/grid\.html\?ids=stress&\S*: /, result.stderr);
 });
 
 test('check-fixtures exempts a missing font face when the fonts are a fallback', async () => {

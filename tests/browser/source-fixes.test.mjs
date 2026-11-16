@@ -320,7 +320,9 @@ test('shots and check-fixtures skip a capture with no snapshot', async () => {
   assert.equal(checked.code, 0, `${checked.stdout}\n${checked.stderr}`);
 });
 
-test('check-fixtures lists a console error, an uncaught exception and a blank picture, and does not stop', async () => {
+// A picture that stays blank is looked at until the deadline on every tab,
+// about 10 s each, so this run gets more time than the others.
+test('check-fixtures lists a console error, an uncaught exception and a blank picture, and does not stop', { timeout: 150000 }, async () => {
   const dir = temp('kinds-');
   cpSync(captures, dir, { recursive: true });
   appendFileSync(join(dir, 'wings-vdb', 'source', 'src', 'main.js'), `
@@ -343,6 +345,7 @@ test('check-fixtures lists a console error, an uncaught exception and a blank pi
   const result = await runNode(
     [join(repo, 'playground', 'check-fixtures.mjs'), '--captures', dir],
     { KNOBS_WINGS_FONTS: fonts, KNOBS_DRAFTS: drafts },
+    140000,
   );
   assert.match(result.stderr, /console error: pin-console/);
   assert.match(result.stderr, /uncaught: pin-uncaught/);
@@ -351,6 +354,41 @@ test('check-fixtures lists a console error, an uncaught exception and a blank pi
   assert.ok(listed.length >= 2, result.stderr);
   assert.match(result.stdout, /wings-vdb: \d+ tabs checked/);
   assert.notEqual(result.code, 0);
+});
+
+test('check-fixtures waits for a picture that draws late and does not call it blank', { timeout: 90000 }, async () => {
+  const dir = temp('late-');
+  cpSync(captures, dir, { recursive: true });
+  appendFileSync(join(dir, 'wings-vdb', 'source', 'src', 'main.js'), `
+;(() => {
+  const keep = () => {
+    const box = document.querySelector('.term-viz');
+    if (!box || box.querySelector('canvas.late-pin')) return;
+    const canvas = document.createElement('canvas');
+    canvas.className = 'late-pin';
+    canvas.width = 8;
+    canvas.height = 8;
+    box.append(canvas);
+    setTimeout(() => {
+      const context = canvas.getContext('2d');
+      context.fillStyle = '#000';
+      context.fillRect(0, 0, 8, 8);
+      context.fillStyle = '#fff';
+      context.fillRect(0, 0, 4, 4);
+    }, 2000);
+  };
+  new MutationObserver(keep).observe(document.documentElement, { childList: true, subtree: true });
+  keep();
+})();
+`);
+  const result = await runNode(
+    [join(repo, 'playground', 'check-fixtures.mjs'), '--captures', dir],
+    { KNOBS_WINGS_FONTS: fonts, KNOBS_DRAFTS: drafts },
+    90000,
+  );
+  assert.doesNotMatch(result.stderr, /is blank/);
+  assert.match(result.stdout, /wings-vdb: \d+ tabs checked/);
+  assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
 });
 
 test('check-fixtures exempts a missing font face when the fonts are a fallback', async () => {

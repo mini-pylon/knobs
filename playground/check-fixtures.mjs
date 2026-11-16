@@ -99,7 +99,7 @@ async function checkProject(adapter) {
           await page.evaluate(openSourceTab, { tab: label });
           await page.waitForTimeout(600);
           if (project === wingsVdb.name) {
-            for (const found of await pictures(page, label)) note(found);
+            for (const found of await drawnPictures(page, label)) note(found);
           }
         } catch (error) {
           note(error.message);
@@ -158,6 +158,18 @@ async function preview(page) {
     return null;
   } catch {
     return 'the preview image never loaded';
+  }
+}
+
+// A picture can take seconds to draw on a slow software renderer, so a
+// blank one is looked at again until it draws or the deadline passes. One
+// still blank then is reported; an unreadable one is reported at once.
+async function drawnPictures(page, tab, deadline = 10000) {
+  const end = Date.now() + deadline;
+  for (;;) {
+    const found = await pictures(page, tab);
+    if (!found.some(problem => problem.endsWith(' is blank')) || Date.now() >= end) return found;
+    await page.waitForTimeout(250);
   }
 }
 

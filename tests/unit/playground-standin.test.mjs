@@ -4,7 +4,7 @@
 // holds what Python drew for each pinned payload.
 import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -93,6 +93,27 @@ for (const [i, about] of ['the defaults', 'a float-bound clamp', 'an int-bound c
     assert.equal(dumps(scene), recorded.values);
   });
 }
+
+test('a failed final whose values are the defaults does not end a defaults preview with no picture', async () => {
+  const copy = mkdtempSync(join(repo, 'tests', '.tmp', 'finals-'));
+  cpSync(source, copy, { recursive: true });
+  const finalsPath = join(copy, 'data', 'finals.json');
+  const finals = JSON.parse(readFileSync(finalsPath, 'utf8'));
+  finals.unshift({ name: 'failed', file: 'failed.png', state: 'failed', url: null, values: {} });
+  writeFileSync(finalsPath, JSON.stringify(finals));
+  const api = standIn(copy);
+  const local = await mount([['/api', api.api], ['/captures/mini-pylon/source', api.files]]);
+  try {
+    const job = await (await post(`${local.url}/api/render`, { kind: 'preview', values: {} })).json();
+    const done = await getJson(`${local.url}/api/jobs/${job.id}`);
+    assert.equal(done.state, 'done');
+    assert.equal(typeof done.url, 'string');
+    assert.ok(done.url.startsWith('/captures/mini-pylon/source/out/previews/'), done.url);
+  } finally {
+    local.server.close();
+    rmSync(copy, { recursive: true, force: true });
+  }
+});
 
 test('a preview of a recorded final\'s values is that final\'s render', async () => {
   const [final] = data('finals.json');

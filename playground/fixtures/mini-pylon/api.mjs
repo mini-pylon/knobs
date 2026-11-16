@@ -197,6 +197,7 @@ export function miniPylon(sourceDir) {
       samples = numberValue(resolved['render.preview_samples']);
       const finals = readData(sourceDir, 'finals.json');
       const match = finals.find(final => {
+        if (typeof final?.url !== 'string') return false;
         const recorded = resolve(vars, loads(JSON.stringify(final.values ?? {})));
         return sameScene(scene, sceneOf(recorded));
       });

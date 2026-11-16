@@ -282,7 +282,13 @@ export function miniPylon(sourceDir) {
       }
       const raw = await readBody(req, res);
       if (raw === null) return;
-      const text = raw.toString('utf8');
+      let text;
+      try {
+        // Fatal decode refuses a byte that toString would replace with U+FFFD, and strips a BOM.
+        text = new TextDecoder('utf-8', { fatal: true }).decode(raw);
+      } catch {
+        throw new HttpError(400, 'the body is not JSON');
+      }
       let payload;
       try {
         payload = loads(text);

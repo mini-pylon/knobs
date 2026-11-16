@@ -284,6 +284,36 @@ test('a body over 1 MB is answered 400 with the refusal text', async () => {
   }
 });
 
+test('a body with invalid UTF-8 is refused as not JSON, and a BOM is still JSON', async () => {
+  const api = standIn(source);
+  const local = await mount([['/api', api.api], ['/captures/mini-pylon/source', api.files]]);
+  try {
+    // Valid JSON once U+FFFD replaces the bad byte, so a loose decode would accept it.
+    const broken = Buffer.concat([
+      Buffer.from('{"kind":"preview","note":"'),
+      Buffer.from([0xff]),
+      Buffer.from('"}'),
+    ]);
+    const refused = await fetch(`${local.url}/api/render`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: broken,
+    });
+    assert.equal(refused.status, 400);
+    assert.equal(await refused.text(), '{"error":"the body is not JSON"}');
+    const bom = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('{"kind":"preview"}')]);
+    const accepted = await fetch(`${local.url}/api/render`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: bom,
+    });
+    assert.equal(accepted.status, 200);
+    assert.equal((await accepted.json()).kind, 'preview');
+  } finally {
+    local.server.close();
+  }
+});
+
 test('a final is refused on its first poll, and an unknown parameter or kind answers 400 with the server\'s text', async () => {
   const final = await (await post(`${pylon.url}/api/render`, { kind: 'final', size: 2160, name: 'x', values: {} })).json();
   assert.equal(final.kind, 'final');

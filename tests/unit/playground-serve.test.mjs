@@ -66,6 +66,47 @@ test('a draft body over 1 MB is answered 400 and writes nothing', async () => {
   }
 });
 
+test('a draft body with invalid UTF-8 is refused and writes nothing', async () => {
+  const root = mkdtempSync(join(repo, 'tests', '.tmp', 'serve-'));
+  const drafts = join(root, 'drafts');
+  const captures = join(root, 'captures');
+  const fonts = join(root, 'fonts');
+  mkdirSync(drafts);
+  mkdirSync(captures);
+  mkdirSync(fonts);
+  const site = await servePlayground({ drafts, captures, fonts, logLevel: 'error' });
+  try {
+    const origin = site.url.replace(/\/$/, '');
+    const broken = Buffer.concat([
+      Buffer.from('{"name":"bad-utf","files":{"controls.js":"'),
+      Buffer.from([0xff]),
+      Buffer.from('"}}'),
+    ]);
+    const refused = await fetch(`${site.url}__playground/draft`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin },
+      body: broken,
+    });
+    assert.equal(refused.status, 400);
+    assert.equal(await refused.text(), '{"error":"the body is not JSON"}');
+    assert.deepEqual(readdirSync(drafts), []);
+    const bom = Buffer.concat([
+      Buffer.from([0xef, 0xbb, 0xbf]),
+      Buffer.from(JSON.stringify({ name: 'with-bom', files: { 'controls.js': 'export const groups = [];\n' } })),
+    ]);
+    const accepted = await fetch(`${site.url}__playground/draft`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin },
+      body: bom,
+    });
+    assert.equal(accepted.status, 200, await accepted.text());
+    assert.deepEqual(readdirSync(drafts), ['with-bom']);
+  } finally {
+    await site.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 describe('source errors stay on the source prefix', { concurrency: 1 }, () => {
   test('an unresolved import in a snapshot module is not the playground page', async () => {
     const served = await serveWings(source => {

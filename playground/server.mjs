@@ -79,8 +79,14 @@ function draftPlugin(drafts) {
         });
         req.on('end', () => {
           if (over) return;
+          let text;
+          try {
+            text = new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks));
+          } catch {
+            return reply(400, 'the body is not JSON');
+          }
           let body;
-          try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return reply(400, 'the body is not JSON'); }
+          try { body = JSON.parse(text); } catch { return reply(400, 'the body is not JSON'); }
           const why = refusal(body);
           if (why) return reply(400, why);
           const dir = join(drafts, body.name);

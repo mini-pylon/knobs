@@ -33,6 +33,16 @@ function visibleGroups(capture) {
   return (capture.groups ?? []).filter(group => !group.hidden).map(group => group.name);
 }
 
+// A tab the source page can show. perf is wings-vdb's page tab: the plan's
+// seed keeps it, and omits the groups key so the page keeps its own view.
+function knownSourceTab(project, capture, tab) {
+  if (visibleGroups(capture).includes(tab)) return true;
+  if (tab === SOURCES[project].console) return true;
+  if (project === 'mini-pylon' && tab === 'renders') return true;
+  if (project === 'wings-vdb' && tab === 'perf') return true;
+  return false;
+}
+
 export function defaultTab(capture) {
   const name = visibleGroups(capture)[0];
   if (!name) throw new Error('the capture has no visible group');
@@ -47,6 +57,7 @@ export function sourceSeed(project, capture, setName, tab = defaultTab(capture))
   if (set.sourceValues == null) {
     throw new Error(`${project}: value set ${setName} has no sourceValues; run npm run playground:capture -- ${project}`);
   }
+  if (!knownSourceTab(project, capture, tab)) throw new Error(`unknown tab: ${tab}`);
   const group = visibleGroups(capture).includes(tab);
   if (project === 'wings-vdb') {
     const local = { 'wings-vdb:params': JSON.stringify(set.sourceValues) };

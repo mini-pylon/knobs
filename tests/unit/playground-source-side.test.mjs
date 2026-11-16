@@ -59,6 +59,13 @@ test('mini-pylon is seeded with every key as JSON: values, the view, the group, 
   assert.ok(!('mini-pylon-tweak:group' in sourceSeed('mini-pylon', pylon, 'defaults', 'renders').local));
 });
 
+test('a seed refuses a tab that is not a visible group, the console tab, or mini-pylon renders', () => {
+  assert.throws(() => sourceSeed('wings-vdb', wings, 'defaults', 'nope'), /unknown tab: nope/);
+  assert.throws(() => sourceSeed('mini-pylon', pylon, 'defaults', 'nope'), /unknown tab: nope/);
+  // perf is wings-vdb's page tab: the seed omits the groups key, it is not an unknown name.
+  assert.ok(!('wings-vdb:groups' in sourceSeed('wings-vdb', wings, 'defaults', 'perf').local));
+});
+
 test('a seed refuses an unknown value set, a capture made before sourceValues, and an unknown project', () => {
   assert.throws(() => sourceSeed('wings-vdb', wings, 'nope'), /unknown value set: nope/);
   const old = structuredClone(pylon);

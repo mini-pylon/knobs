@@ -5,7 +5,7 @@
 import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { createServer } from 'node:http';
+import { createServer, request as httpRequest } from 'node:http';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { snapshot } from '../../playground/adapters/common.mjs';
@@ -236,6 +236,52 @@ test('a preview of a recorded final\'s values is that final\'s render', async ()
   const response = await fetch(`${pylon.url}${final.url}`);
   assert.equal(response.status, 200);
   assert.deepEqual(Buffer.from(await response.arrayBuffer()), readFileSync(join(source, 'renders', final.file)));
+});
+
+function postRaw(url, chunks) {
+  const target = new URL(url);
+  return new Promise((resolve, reject) => {
+    const req = httpRequest({
+      hostname: target.hostname,
+      port: target.port,
+      path: target.pathname,
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+    }, response => {
+      const parts = [];
+      response.on('data', part => parts.push(part));
+      response.on('end', () => resolve({
+        status: response.statusCode,
+        connection: response.headers.connection,
+        text: Buffer.concat(parts).toString('utf8'),
+      }));
+    });
+    req.on('error', reject);
+    for (const chunk of chunks) req.write(chunk);
+    req.end();
+  });
+}
+
+test('a body over 1 MB is answered 400 with the refusal text', async () => {
+  const api = standIn(source);
+  const local = await mount([['/api', api.api], ['/captures/mini-pylon/source', api.files]]);
+  try {
+    const response = await fetch(`${local.url}/api/render`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: 'x'.repeat(2_000_000),
+    });
+    assert.equal(response.status, 400);
+    assert.equal(await response.text(), '{"error":"the body is over 1 MB"}');
+    assert.equal(response.headers.get('connection'), 'close');
+    // No content-length: the cap is applied while reading, and the rest is not kept.
+    const streamed = await postRaw(`${local.url}/api/render`, ['x'.repeat(600_000), 'y'.repeat(600_000)]);
+    assert.equal(streamed.status, 400);
+    assert.equal(streamed.text, '{"error":"the body is over 1 MB"}');
+    assert.equal(streamed.connection, 'close');
+  } finally {
+    local.server.close();
+  }
 });
 
 test('a final is refused on its first poll, and an unknown parameter or kind answers 400 with the server\'s text', async () => {

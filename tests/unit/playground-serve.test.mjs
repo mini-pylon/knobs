@@ -4,7 +4,7 @@
 import test, { describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,6 +35,36 @@ async function serveWings(mutate) {
     },
   };
 }
+
+test('a draft body over 1 MB is answered 400 and writes nothing', async () => {
+  const root = mkdtempSync(join(repo, 'tests', '.tmp', 'serve-'));
+  const drafts = join(root, 'drafts');
+  const captures = join(root, 'captures');
+  const fonts = join(root, 'fonts');
+  mkdirSync(drafts);
+  mkdirSync(captures);
+  mkdirSync(fonts);
+  const site = await servePlayground({ drafts, captures, fonts, logLevel: 'error' });
+  try {
+    const origin = site.url.replace(/\/$/, '');
+    const body = JSON.stringify({
+      name: 'too-big',
+      files: { 'controls.js': 'export const groups = [];\n', 'visual.js': 'x'.repeat(2_000_000) },
+    });
+    const response = await fetch(`${site.url}__playground/draft`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin },
+      body,
+    });
+    assert.equal(response.status, 400);
+    assert.equal(await response.text(), '{"error":"the body is over 1 MB"}');
+    assert.equal(response.headers.get('connection'), 'close');
+    assert.deepEqual(readdirSync(drafts), []);
+  } finally {
+    await site.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 describe('source errors stay on the source prefix', { concurrency: 1 }, () => {
   test('an unresolved import in a snapshot module is not the playground page', async () => {

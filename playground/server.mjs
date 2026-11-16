@@ -45,9 +45,11 @@ function draftPlugin(drafts) {
       // A draft added on disk reaches the scenario list, even outside the root.
       server.watcher.add(drafts);
       server.middlewares.use(DRAFT_ROUTE, (req, res) => {
-        const reply = (status, message) => {
+        const reply = (status, message, close) => {
+          if (res.headersSent || res.writableEnded) return;
           res.statusCode = status;
           res.setHeader('content-type', 'application/json');
+          if (close) res.setHeader('connection', 'close');
           res.end(JSON.stringify(status === 200 ? { ok: true, ...message } : { error: message }));
         };
         if (req.method !== 'POST') return reply(405, 'POST only');
@@ -55,14 +57,28 @@ function draftPlugin(drafts) {
         let originHost = null;
         try { originHost = new URL(req.headers.origin).host; } catch { /* no or bad origin */ }
         if (!originHost || originHost !== req.headers.host) return reply(403, 'same origin only');
+        const declared = Number(req.headers['content-length']);
+        if (Number.isFinite(declared) && declared > LIMIT) {
+          reply(400, 'the body is over 1 MB', true);
+          req.resume();
+          return;
+        }
         let size = 0;
         const chunks = [];
+        let over = false;
         req.on('data', chunk => {
+          if (over) return;
           size += chunk.length;
-          if (size > LIMIT) req.destroy();
-          else chunks.push(chunk);
+          if (size > LIMIT) {
+            over = true;
+            chunks.length = 0;
+            reply(400, 'the body is over 1 MB', true);
+            return;
+          }
+          chunks.push(chunk);
         });
         req.on('end', () => {
+          if (over) return;
           let body;
           try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return reply(400, 'the body is not JSON'); }
           const why = refusal(body);

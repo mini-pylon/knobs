@@ -116,29 +116,55 @@ function isRecord(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value) && !(value instanceof PyNum);
 }
 
-async function readBody(req) {
+// Answer, then drop the unread remainder. Destroying first resets the socket
+// and the client never sees the 400.
+function refuseOversize(req, res) {
+  if (res.headersSent || res.writableEnded) return;
+  const payload = '{"error":"the body is over 1 MB"}';
+  res.writeHead(400, {
+    'content-type': 'application/json',
+    'cache-control': 'no-store',
+    'connection': 'close',
+    'content-length': String(Buffer.byteLength(payload)),
+  });
+  res.end(payload);
+  req.resume();
+}
+
+function readBody(req, res) {
   const declared = Number(req.headers['content-length']);
   if (Number.isFinite(declared) && declared > BODY_LIMIT) {
-    req.destroy();
-    throw new HttpError(400, 'the body is over 1 MB');
+    refuseOversize(req, res);
+    return Promise.resolve(null);
   }
-  const chunks = [];
-  let size = 0;
-  try {
-    for await (const chunk of req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    let settled = false;
+    req.on('data', chunk => {
+      if (settled) return;
       size += chunk.length;
       if (size > BODY_LIMIT) {
-        req.destroy();
-        throw new HttpError(400, 'the body is over 1 MB');
+        settled = true;
+        chunks.length = 0;
+        refuseOversize(req, res);
+        resolve(null);
+        return;
       }
       chunks.push(chunk);
-    }
-  } catch (error) {
-    if (error instanceof HttpError) throw error;
-    if (size > BODY_LIMIT) throw new HttpError(400, 'the body is over 1 MB');
-    throw error;
-  }
-  return Buffer.concat(chunks);
+    });
+    req.on('end', () => {
+      if (settled) return;
+      settled = true;
+      resolve(Buffer.concat(chunks));
+    });
+    req.on('error', error => {
+      if (settled) return;
+      settled = true;
+      if (res.headersSent) resolve(null);
+      else reject(error);
+    });
+  });
 }
 
 function servePng(req, res, bytes) {
@@ -254,7 +280,9 @@ export function miniPylon(sourceDir) {
         json(req, res, 404, { error: 'not found' });
         return;
       }
-      const text = (await readBody(req)).toString('utf8');
+      const raw = await readBody(req, res);
+      if (raw === null) return;
+      const text = raw.toString('utf8');
       let payload;
       try {
         payload = loads(text);

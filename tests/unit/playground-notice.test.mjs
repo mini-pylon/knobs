@@ -26,3 +26,23 @@ test('the README\'s Captures section links the NOTICE and describes the source s
   assert.match(readme, /knobs-<project>/);
   assert.doesNotMatch(readme, /titled with the exemplar's, draft's or capture's name/);
 });
+
+test('the source side section names the stubbed modules and both storage prefixes', () => {
+  const readme = read('playground/README.md');
+  const heading = '### The source side';
+  const start = readme.indexOf(heading);
+  assert.ok(start >= 0, 'the README has a source side section');
+  const rest = readme.slice(start + heading.length);
+  const next = rest.search(/\n#{1,3} /);
+  const section = rest.slice(0, next === -1 ? rest.length : next);
+  assert.ok(section.length < readme.length, 'the section is not the whole file');
+  for (const words of ['src/chat.js', 'src/dev-report.js', 'wings-vdb:', 'mini-pylon-tweak:']) {
+    assert.ok(section.includes(words), `the source side section names ${words}`);
+  }
+  assert.match(section, /tweak_server\.py/);
+  assert.match(section, /CSS font stack/);
+  assert.match(section, /seeds it again/);
+  assert.doesNotMatch(section, /stand-in face/);
+  assert.doesNotMatch(section, /stand-in for the tweak page/);
+  assert.doesNotMatch(section, /last until the next load/);
+});

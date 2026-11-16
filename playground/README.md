@@ -120,16 +120,20 @@ across: the source page's console is the project's name, and the knobs drawer is
 `knobs-<project>`. The fixture line names the snapshot, the stubbed modules, what the stand-in
 refuses, and, for wings-vdb, whether the fonts are local or a fallback.
 
-The seed clears that page's storage prefixes, then writes the value set and the tab. Edits made
-in the page last until the next load. Source cells and source shots run one tab at a time, so
+The seed clears every `wings-vdb:` and `mini-pylon-tweak:` key in both storages, then writes
+the value set and the tab. Edits in the page last until the shell or the grid seeds it again
+(a reload of the shell, or another set, tab or side). Reloading the source page, or opening it
+in a second tab, does not reseed. Source cells and source shots run one tab at a time, so
 each page starts from its own seed.
 
-wings-vdb's source is a Vite instance on the playground's own port. Its fonts come from the
-wings-vdb checkout, or from `KNOBS_WINGS_FONTS` when that is set, and the page falls back to a
-stand-in face when the files are not there. Saving defaults (`/__wings/defaults`) is refused.
+wings-vdb's source is a Vite instance on the playground's own port. Two modules are stubbed
+rather than copied: `src/chat.js` and `src/dev-report.js`. Its fonts come from the
+wings-vdb checkout, or from `KNOBS_WINGS_FONTS` when that is set. When the files are not
+there, no face is served and the page falls back to its own CSS font stack. Saving defaults
+(`/__wings/defaults`) is refused.
 
-mini-pylon's source is plain files plus a stand-in for the tweak page. Previews are served at
-once. Finals are refused.
+mini-pylon's source is the plain files of its tweak page. The stand-in replaces
+`tweak_server.py`; it does not replace the page. Previews are served at once. Finals are refused.
 
 The server mounts whatever is in the captures folder when it starts, so restart it after a
 capture. For the unit above, `systemctl --user restart knobs-playground`.

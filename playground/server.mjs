@@ -17,6 +17,7 @@ import { join, resolve } from 'node:path';
 import { aliases, repo, serve } from '../tests/browser/lib/harness.mjs';
 import * as wingsVdb from './adapters/wings-vdb.mjs';
 import { fixturesPlugin } from './fixtures/routes.mjs';
+import { PREFIXES } from './fixtures/source-side.js';
 
 export const DRAFT_ROUTE = '/__playground/draft';
 const DRAFT_FILES = ['controls.js', 'visual.js', 'extension.js'];
@@ -27,6 +28,8 @@ const LIMIT = 1_000_000;
 function refusal(body) {
   if (!body || typeof body !== 'object') return 'the body must be a JSON object';
   if (typeof body.name !== 'string' || !NAME.test(body.name)) return 'name: letters, digits, - and _ only';
+  const prefix = PREFIXES.find(entry => `${body.name}:`.startsWith(entry));
+  if (prefix) return `${body.name}: a draft cannot use the source storage prefix ${prefix}`;
   const files = body.files;
   if (!files || typeof files !== 'object') return 'files must be an object';
   for (const [file, text] of Object.entries(files)) {

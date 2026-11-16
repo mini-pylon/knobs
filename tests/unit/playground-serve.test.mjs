@@ -314,6 +314,35 @@ describe('source errors stay on the source prefix', { concurrency: 1 }, () => {
   });
 });
 
+test('a draft whose name uses a source storage prefix is refused with its name', async () => {
+  const root = mkdtempSync(join(repo, 'tests', '.tmp', 'serve-'));
+  const drafts = join(root, 'drafts');
+  const captures = join(root, 'captures');
+  const fonts = join(root, 'fonts');
+  mkdirSync(drafts);
+  mkdirSync(captures);
+  mkdirSync(fonts);
+  const site = await servePlayground({ drafts, captures, fonts, logLevel: 'error' });
+  try {
+    const origin = site.url.replace(/\/$/, '');
+    for (const name of ['wings-vdb', 'mini-pylon-tweak']) {
+      const response = await fetch(`${site.url}__playground/draft`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin },
+        body: JSON.stringify({ name, files: { 'controls.js': 'export const groups = [];\n' } }),
+      });
+      const body = await response.json();
+      assert.equal(response.status, 400, `${name}: ${JSON.stringify(body)}`);
+      assert.match(body.error, new RegExp(name));
+      assert.match(body.error, /source storage prefix/);
+    }
+    assert.deepEqual(readdirSync(drafts), []);
+  } finally {
+    await site.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 function runChild(script) {
   return new Promise(resolve => {
     execFile(process.execPath, ['--input-type=module', '-e', script], { timeout: 12000 }, (error, stdout, stderr) => {

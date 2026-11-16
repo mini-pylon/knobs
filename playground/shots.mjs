@@ -112,20 +112,32 @@ try {
   // The set's scenario ids. Captures come from the scenario list, not from a
   // grid of source cells: that grid would run every source page just to name them.
   const sets = new Set(['exemplars', 'seeds', 'drafts', 'captures', 'all']);
+  // A set that cannot be listed is one failure naming the page that lists it,
+  // with any page error seen there; nothing is shot after it.
   let ids = values.only.split(',');
-  if (ids.length === 1 && ids[0] === 'captures') {
-    await page.goto(site.url);
-    const names = await page.evaluate(async () => {
-      const { captureNames } = await import('./scenarios.js');
-      return captureNames;
-    });
-    ids = names.map(name => name.startsWith('capture:') ? name : `capture:${name}`);
-  } else if (ids.length === 1 && sets.has(ids[0])) {
-    await page.goto(`${site.url}grid.html?set=${ids[0]}&n=8`);
-    await page.locator('body[data-ready]').waitFor({ timeout: 60000 });
-    // Knobs cells only: a capture row's source and shot cells are not scenarios.
-    const titles = await page.locator('.cell:not(.source):not(.shot) iframe').evaluateAll(frames => frames.map(f => f.title));
-    ids = [...new Set(titles)];
+  let listed = true;
+  let listUrl = site.url;
+  try {
+    if (ids.length === 1 && ids[0] === 'captures') {
+      await page.goto(listUrl);
+      const names = await page.evaluate(async () => {
+        const { captureNames } = await import('./scenarios.js');
+        return captureNames;
+      });
+      ids = names.map(name => name.startsWith('capture:') ? name : `capture:${name}`);
+    } else if (ids.length === 1 && sets.has(ids[0])) {
+      listUrl = `${site.url}grid.html?set=${ids[0]}&n=8`;
+      await page.goto(listUrl);
+      await page.locator('body[data-ready]').waitFor({ timeout: 60000 });
+      // Knobs cells only: a capture row's source and shot cells are not scenarios.
+      const titles = await page.locator('.cell:not(.source):not(.shot) iframe').evaluateAll(frames => frames.map(f => f.title));
+      ids = [...new Set(titles)];
+    }
+  } catch (error) {
+    const seen = errors.length ? `; page errors: ${errors.join('; ')}` : '';
+    failures.push(`${values.only}: ${listUrl}: ${error.message}${seen}`);
+    listed = false;
+    ids = [];
   }
 
   for (const id of ids) {
@@ -167,15 +179,17 @@ try {
   // The grid's source cells are live frames of the real pages, so its
   // screenshot can stall as theirs can; the failure names the grid page.
   const gridUrl = `${site.url}grid.html?ids=${ids.map(encodeURIComponent).join(',')}&w=640&h=420`;
-  try {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(gridUrl);
-    await page.locator('body[data-ready]').waitFor({ timeout: 60000 });
-    await page.waitForTimeout(400);
-    await page.screenshot({ path: join(out, 'grid.png'), fullPage: true });
-    console.log(join(out, 'grid.png'));
-  } catch (error) {
-    failures.push(`grid: ${gridUrl}: ${error.message}`);
+  if (listed) {
+    try {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto(gridUrl);
+      await page.locator('body[data-ready]').waitFor({ timeout: 60000 });
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: join(out, 'grid.png'), fullPage: true });
+      console.log(join(out, 'grid.png'));
+    } catch (error) {
+      failures.push(`grid: ${gridUrl}: ${error.message}`);
+    }
   }
   await context.close();
 } finally {

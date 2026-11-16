@@ -443,6 +443,34 @@ test('playground:shots lists a grid shot that fails with the grid page, and does
   assert.match(result.stderr, /failed:\ngrid: http:\/\/127\.0\.0\.1:\d+\/grid\.html\?ids=stress&\S*: /, result.stderr);
 });
 
+// A capture.json that is not JSON breaks the scenario list every page imports,
+// so playground:shots cannot learn the ids it is asked for.
+function brokenCaptures() {
+  const dir = temp('broken-captures-');
+  cpSync(captures, dir, { recursive: true });
+  writeFileSync(join(dir, 'wings-vdb', 'capture.json'), '{ not json');
+  return dir;
+}
+
+test('playground:shots lists a captures set it cannot read with its page, and does not throw', async () => {
+  const result = await runNode(
+    [join(repo, 'playground', 'shots.mjs'), '--only', 'captures', '--out', temp('list-fail-'), '--scale', '1'],
+    shotEnv(brokenCaptures()),
+  );
+  assert.equal(result.code, 1, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stderr, /failed:\ncaptures: http:\/\/127\.0\.0\.1:\d+\/: \S/, result.stderr);
+});
+
+test('playground:shots lists a set whose grid never readies with its page, and does not throw', { timeout: 150000 }, async () => {
+  const result = await runNode(
+    [join(repo, 'playground', 'shots.mjs'), '--only', 'exemplars', '--out', temp('list-fail-'), '--scale', '1'],
+    shotEnv(brokenCaptures()),
+    140000,
+  );
+  assert.equal(result.code, 1, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stderr, /failed:\nexemplars: http:\/\/127\.0\.0\.1:\d+\/grid\.html\?set=exemplars&n=8: \S/, result.stderr);
+});
+
 test('check-fixtures exempts a missing font face when the fonts are a fallback', async () => {
   const result = await runNode(
     [join(repo, 'playground', 'check-fixtures.mjs'), '--captures', captures],

@@ -2,12 +2,13 @@
 //   set=exemplars          every exemplar (the default)
 //   set=seeds&from=1&n=12  a run of random seeds (g sets their group count)
 //   set=drafts             every draft in the drafts folder
-//   set=captures           every capture in the captures folder, with its defaults
+//   set=captures           one row per visible tab: the shot, the source page, the knobs page
 //   set=all                stress, every exemplar, draft and capture, and 8 seeds
 //   ids=a,b,c              these scenarios, in place of a set
 // tab= opens every stage on that tab; w= and h= size the cells.
 // body[data-ready] marks every stage mounted or failed.
-import { captureNames, draftNames, exemplarNames } from './scenarios.js';
+import { openSourceTab, seedSource, sourceSeed, sourceUrl } from './fixtures/source-side.js';
+import { captureNames, captureOf, draftNames, exemplarNames } from './scenarios.js';
 
 const params = new URLSearchParams(location.search);
 const set = params.get('set') ?? 'exemplars';
@@ -45,14 +46,19 @@ const width = Number(params.get('w') ?? 640);
 const height = Number(params.get('h') ?? 420);
 const cells = document.querySelector('.cells');
 
-function cell(id) {
+// A stage cell. options.tab, the row it is added to, the size and the class
+// are for a capture row's knobs cell; every other set calls it with the id.
+function cell(id, options = {}) {
+  const { tab, parent = cells, width: cellWidth = width, height: cellHeight = height, className = 'cell' } = options;
   const query = new URLSearchParams({ s: id });
-  for (const key of ['tab', 'g']) if (params.get(key)) query.set(key, params.get(key));
+  if (tab) query.set('tab', tab);
+  else if (params.get('tab')) query.set('tab', params.get('tab'));
+  if (params.get('g')) query.set('g', params.get('g'));
   const figure = document.createElement('figure');
-  figure.className = 'cell';
+  figure.className = className;
   const frame = document.createElement('iframe');
-  frame.width = String(width);
-  frame.height = String(height);
+  frame.width = String(cellWidth);
+  frame.height = String(cellHeight);
   frame.title = id;
   frame.src = `./stage.html?${query}`;
   const caption = document.createElement('figcaption');
@@ -65,7 +71,7 @@ function cell(id) {
   open.textContent = 'open';
   caption.append(label, why, open);
   figure.append(frame, caption);
-  cells.append(figure);
+  parent.append(figure);
   return new Promise(resolve => {
     const poll = setInterval(() => {
       const body = frame.contentDocument?.body;
@@ -80,5 +86,125 @@ function cell(id) {
   });
 }
 
+function shotFigure(record, tab) {
+  const figure = document.createElement('figure');
+  figure.className = 'cell shot';
+  const shot = (record.shots ?? []).find(item => item.tab === tab && item.url);
+  if (shot) {
+    const img = document.createElement('img');
+    img.src = shot.url;
+    img.alt = `${record.name}'s drawer, ${tab} tab`;
+    figure.append(img);
+  } else {
+    const why = document.createElement('p');
+    why.className = 'why';
+    why.textContent = `no shot of ${tab}`;
+    figure.append(why);
+  }
+  const caption = document.createElement('figcaption');
+  caption.textContent = 'shot';
+  figure.append(caption);
+  return figure;
+}
+
+function sourceFigure(name, tab, cellWidth, cellHeight) {
+  const figure = document.createElement('figure');
+  figure.className = 'cell source';
+  const frame = document.createElement('iframe');
+  frame.title = `source:${name}:${tab}`;
+  frame.width = String(cellWidth);
+  frame.height = String(cellHeight);
+  const caption = document.createElement('figcaption');
+  caption.append('source');
+  const why = document.createElement('span');
+  why.className = 'why';
+  caption.append(why);
+  figure.append(frame, caption);
+  return figure;
+}
+
+// The source frame's load, ignoring the empty document it starts on.
+function waitForLoad(frame, ms) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      frame.removeEventListener('load', onLoad);
+      reject(new Error(`the source frame did not load within ${ms} ms`));
+    }, ms);
+    function onLoad() {
+      let href = '';
+      try { href = frame.contentWindow?.location?.href ?? ''; } catch { href = ''; }
+      if (!href || href === 'about:blank') return;
+      clearTimeout(timer);
+      frame.removeEventListener('load', onLoad);
+      resolve();
+    }
+    frame.addEventListener('load', onLoad);
+  });
+}
+
+async function loadSource(figure, name, record, tab) {
+  figure.dataset.started = String(performance.now());
+  const why = figure.querySelector('.why');
+  const fail = message => {
+    figure.classList.add('failed');
+    why.textContent = message;
+    figure.dataset.ready = String(performance.now());
+  };
+  if (!record.vendored) {
+    fail(`${name}: ${tab}: no source snapshot`);
+    return;
+  }
+  const frame = figure.querySelector('iframe');
+  try {
+    seedSource(sourceSeed(name, record, 'defaults', tab));
+    const loaded = waitForLoad(frame, 15000);
+    frame.setAttribute('src', sourceUrl(name));
+    await loaded;
+    await openSourceTab({ tab }, frame.contentDocument);
+    figure.dataset.ready = String(performance.now());
+  } catch (error) {
+    fail(`${name}: ${tab}: ${error.message}`);
+  }
+}
+
+// One row per visible group. The knobs cells load together; the source cells
+// load one at a time, each seeded before its page starts.
+async function captureRows() {
+  const [rowWidth, rowHeight] = [Number(params.get('w') ?? 960), Number(params.get('h') ?? 600)];
+  const knobs = [];
+  const sources = [];
+  try {
+    for (const id of captureNames) {
+      const name = id.startsWith('capture:') ? id.slice('capture:'.length) : id;
+      const record = await captureOf(name);
+      const tabs = (record.groups ?? []).filter(group => !group.hidden).map(group => group.name);
+      for (const tab of tabs) {
+        const row = document.createElement('section');
+        row.className = 'capture-row';
+        row.dataset.capture = name;
+        row.dataset.tab = tab;
+        const heading = document.createElement('h2');
+        heading.textContent = `capture:${name} · ${tab}`;
+        const source = sourceFigure(name, tab, rowWidth, rowHeight);
+        row.append(heading, shotFigure(record, tab), source);
+        cells.append(row);
+        sources.push({ figure: source, name, record, tab });
+        knobs.push(cell(`capture:${name}`, { tab, parent: row, width: rowWidth, height: rowHeight, className: 'cell knobs' }));
+      }
+    }
+    await Promise.all([
+      Promise.all(knobs),
+      (async () => {
+        for (const source of sources) await loadSource(source.figure, source.name, source.record, source.tab);
+      })(),
+    ]);
+  } catch (error) {
+    document.body.dataset.error = error.message;
+  } finally {
+    document.body.dataset.ready = '1';
+  }
+}
+
 const ids = params.get('ids') ? params.get('ids').split(',') : sets[set]();
-Promise.all(ids.map(cell)).then(() => { document.body.dataset.ready = '1'; });
+if (set === 'captures' && !params.get('ids')) void captureRows();
+else Promise.all(ids.map(id => cell(id))).then(() => { document.body.dataset.ready = '1'; });

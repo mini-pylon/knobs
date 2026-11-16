@@ -46,6 +46,11 @@ function capture(name, set) {
   return { groups: data.groups, values: valueSet.values, capture: { ...data, name, set, shots } };
 }
 
+// The capture a capture:<name> stage mounts with its defaults, shots included.
+export async function captureOf(name) {
+  return (await capture(name, 'defaults')).capture;
+}
+
 export const stress = [
   { name: 'numbers', about: 'Ranges and steps at their edges', controls: [
     { key: 'plain', type: 'number', value: 0.4, min: 0, max: 1, step: 0.01, about: 'An ordinary 0 to 1 slider.' },

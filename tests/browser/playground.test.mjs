@@ -418,11 +418,37 @@ test('the capture view says why a capture has no shots', async () => {
   } finally { await page.context().close(); }
 });
 
-test('the grid shows the captures set', async () => {
-  const { page, errors } = await grid('set=captures');
+test('the grid shows a row per tab of each capture: its shot, its source side and its knobs side', async () => {
+  const page = await newPage(browser, { viewport: { width: 1600, height: 1000 } });
+  const errors = collectPageErrors(page);
+  await page.goto(`${site.url}grid.html?set=captures`);
+  await page.locator('body[data-ready]').waitFor({ timeout: 30000 });
   try {
-    assert.deepEqual((await captions(page)).map(c => c.split(/\s/)[0]), ['capture:mini-pylon', 'capture:wings-vdb']);
+    const rows = await page.locator('.capture-row').evaluateAll(r => r.map(x => `${x.dataset.capture} ${x.dataset.tab}`));
+    assert.deepEqual(rows, [
+      ...['ground', 'clutter', 'light', 'camera', 'pylon', 'render'].map(t => `mini-pylon ${t}`),
+      ...['dispersal', 'scroll', 'presence', 'sunlight', 'dive'].map(t => `wings-vdb ${t}`),
+    ]);
+    for (const row of await page.locator('.capture-row').all()) {
+      assert.deepEqual(await row.locator('figure').evaluateAll(f => f.map(x => x.className)), ['cell shot', 'cell source', 'cell knobs']);
+    }
+    // wings-vdb's dispersal row has its shot; the others say they have none.
+    const dispersal = page.locator('.capture-row[data-capture="wings-vdb"][data-tab="dispersal"]');
+    assert.ok(await dispersal.locator('.shot img').evaluate(img => img.complete && img.naturalWidth === 1));
+    assert.equal(await page.locator('.capture-row[data-tab="scroll"] .shot .why').innerText(), 'no shot of scroll');
     assert.equal(await page.locator('.cell.failed').count(), 0);
+    // Each source cell ended open on its own tab, in its own page.
+    for (const frame of page.frames().filter(f => f.url().includes('/source/'))) {
+      const title = await frame.frameElement().then(e => e.getAttribute('title'));
+      const tab = title.split(':')[2];
+      assert.equal(await frame.locator('.term.open .term-tab.active').innerText(), tab, title);
+    }
+    // One at a time: each source cell started after the one before it was ready.
+    const times = await page.locator('.cell.source').evaluateAll(f => f.map(x => [Number(x.dataset.started), Number(x.dataset.ready)]));
+    assert.equal(times.length, 11);
+    for (let i = 1; i < times.length; i++) assert.ok(times[i][0] >= times[i - 1][1], `source cell ${i} started before cell ${i - 1} was ready`);
+    // The knobs cells are the knobs side, on the row's tab.
+    assert.equal(await page.frameLocator('.capture-row[data-capture="wings-vdb"][data-tab="scroll"] .knobs iframe').locator('.term-tab.active').innerText(), 'scroll');
     assert.deepEqual(errors, []);
   } finally { await page.context().close(); }
 });

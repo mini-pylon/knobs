@@ -120,3 +120,13 @@ test('the root-path table names each path a page asks for outside its prefix, an
   for (const path of ['/api/schema', '/captures/mini-pylon/source/out/previews/p.png']) assert.ok(allowedRequest(path, 'mini-pylon'), path);
   for (const path of ['/fonts/ABCArealVariable.woff2', '/tweak.js', '/out/previews/p.png']) assert.ok(!allowedRequest(path, 'mini-pylon'), path);
 });
+
+test('a same-host request on another scheme or port is another origin', async () => {
+  const { anotherOrigin } = await import('../../playground/fixtures/routes.mjs');
+  assert.equal(typeof anotherOrigin, 'function');
+  const site = 'http://127.0.0.1:9/';
+  assert.equal(anotherOrigin(site, 'https://127.0.0.1:9/probe'), true);
+  assert.equal(anotherOrigin(site, 'http://127.0.0.1:10/probe'), true);
+  assert.equal(anotherOrigin(site, 'http://127.0.0.1:9/probe'), false);
+  assert.equal(anotherOrigin('http://localhost/', 'https://localhost/probe'), true);
+});

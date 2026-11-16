@@ -124,6 +124,10 @@ function missingSnapshot(project) {
   };
 }
 
+export function anotherOrigin(siteUrl, requestUrl) {
+  return new URL(requestUrl).origin !== new URL(siteUrl).origin;
+}
+
 function requestPath(req) {
   return String(req.originalUrl || req.url || '').split('?')[0];
 }

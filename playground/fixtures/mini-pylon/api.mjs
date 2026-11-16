@@ -196,9 +196,17 @@ export function miniPylon(sourceDir) {
       size = numberValue(resolved['render.preview_size']);
       samples = numberValue(resolved['render.preview_samples']);
       const finals = readData(sourceDir, 'finals.json');
+      if (!Array.isArray(finals)) throw new Error('finals.json is not a list');
       const match = finals.find(final => {
         if (typeof final?.url !== 'string') return false;
-        const recorded = resolve(vars, loads(JSON.stringify(final.values ?? {})));
+        // One recorded final whose values no longer resolve is not a match.
+        // The real server lists finals without resolving them.
+        let recorded;
+        try {
+          recorded = resolve(vars, loads(JSON.stringify(final.values ?? {})));
+        } catch {
+          return false;
+        }
         return sameScene(scene, sceneOf(recorded));
       });
       if (match) url = match.url;

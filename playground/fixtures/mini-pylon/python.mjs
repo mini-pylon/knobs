@@ -160,9 +160,21 @@ function asPy(value, typeName) {
 }
 
 export function typedVars(schema, types) {
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema) || !Array.isArray(schema.groups)) {
+    throw new Error('schema.json has no groups');
+  }
+  if (!types || typeof types !== 'object' || Array.isArray(types)) {
+    throw new Error('types.json is not an object');
+  }
   const vars = [];
   for (const group of schema.groups) {
+    if (!group || typeof group !== 'object' || Array.isArray(group) || typeof group.name !== 'string' || !Array.isArray(group.vars)) {
+      throw new Error('schema.json has a group that is not a named list of vars');
+    }
     for (const variable of group.vars) {
+      if (!variable || typeof variable !== 'object' || Array.isArray(variable) || typeof variable.key !== 'string') {
+        throw new Error(`schema.json group ${group.name} has a var with no key`);
+      }
       const path = `${group.name}.${variable.key}`;
       const info = types[path];
       if (!info) throw new Error(`types.json has no ${path}`);

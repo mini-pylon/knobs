@@ -115,6 +115,119 @@ test('a failed final whose values are the defaults does not end a defaults previ
   }
 });
 
+async function mountEdited(edit) {
+  const copy = mkdtempSync(join(repo, 'tests', '.tmp', 'finals-'));
+  cpSync(source, copy, { recursive: true });
+  edit(copy);
+  const api = standIn(copy);
+  const local = await mount([['/api', api.api], ['/captures/mini-pylon/source', api.files]]);
+  local.copy = copy;
+  return local;
+}
+
+function closeEdited(local) {
+  local.server.close();
+  rmSync(local.copy, { recursive: true, force: true });
+}
+
+function writeData(copy, name, value) {
+  writeFileSync(join(copy, 'data', name), JSON.stringify(value));
+}
+
+test('a final whose values no longer resolve is not a match and the preview goes on', async () => {
+  const [recorded] = data('finals.json');
+  const local = await mountEdited(copy => {
+    const finals = JSON.parse(readFileSync(join(copy, 'data', 'finals.json'), 'utf8'));
+    finals.unshift({
+      name: 'renamed',
+      file: 'renamed.png',
+      state: 'done',
+      url: '/captures/mini-pylon/source/renders/renamed.png',
+      values: { 'renamed.gone': 1 },
+    });
+    writeData(copy, 'finals.json', finals);
+  });
+  try {
+    const posted = await post(`${local.url}/api/render`, { kind: 'preview', values: {} });
+    assert.equal(posted.status, 200);
+    const job = await posted.json();
+    const done = await getJson(`${local.url}/api/jobs/${job.id}`);
+    assert.equal(done.state, 'done');
+    assert.ok(done.url.startsWith('/captures/mini-pylon/source/out/previews/'), done.url);
+    const matched = await (await post(`${local.url}/api/render`, { kind: 'preview', values: recorded.values })).json();
+    const matchedDone = await getJson(`${local.url}/api/jobs/${matched.id}`);
+    assert.equal(matchedDone.state, 'done');
+    assert.equal(matchedDone.url, recorded.url);
+  } finally {
+    closeEdited(local);
+  }
+});
+
+test('a finals.json that is not a list names that file', async () => {
+  const local = await mountEdited(copy => writeData(copy, 'finals.json', { not: 'a list' }));
+  try {
+    const response = await post(`${local.url}/api/render`, { kind: 'preview', values: {} });
+    assert.equal(response.status, 500);
+    assert.match((await response.json()).error, /finals\.json/);
+  } finally {
+    closeEdited(local);
+  }
+});
+
+test('a schema.json that has no groups names that file', async () => {
+  const local = await mountEdited(copy => writeData(copy, 'schema.json', { groups: null }));
+  try {
+    const response = await post(`${local.url}/api/render`, { kind: 'preview', values: {} });
+    assert.equal(response.status, 500);
+    assert.match((await response.json()).error, /schema\.json/);
+  } finally {
+    closeEdited(local);
+  }
+});
+
+test('a schema.json group that is not a list of vars names that file', async () => {
+  const local = await mountEdited(copy => {
+    const schema = JSON.parse(readFileSync(join(copy, 'data', 'schema.json'), 'utf8'));
+    schema.groups[0].vars = null;
+    writeData(copy, 'schema.json', schema);
+  });
+  try {
+    const response = await post(`${local.url}/api/render`, { kind: 'preview', values: {} });
+    assert.equal(response.status, 500);
+    assert.match((await response.json()).error, /schema\.json/);
+  } finally {
+    closeEdited(local);
+  }
+});
+
+test('a schema.json var with no key names that file, not types.json', async () => {
+  const local = await mountEdited(copy => {
+    const schema = JSON.parse(readFileSync(join(copy, 'data', 'schema.json'), 'utf8'));
+    schema.groups[0].vars[0] = {};
+    writeData(copy, 'schema.json', schema);
+  });
+  try {
+    const response = await post(`${local.url}/api/render`, { kind: 'preview', values: {} });
+    assert.equal(response.status, 500);
+    const { error } = await response.json();
+    assert.match(error, /schema\.json/);
+    assert.doesNotMatch(error, /types\.json/);
+  } finally {
+    closeEdited(local);
+  }
+});
+
+test('a types.json that is not an object names that file', async () => {
+  const local = await mountEdited(copy => writeData(copy, 'types.json', null));
+  try {
+    const response = await post(`${local.url}/api/render`, { kind: 'preview', values: {} });
+    assert.equal(response.status, 500);
+    assert.match((await response.json()).error, /types\.json/);
+  } finally {
+    closeEdited(local);
+  }
+});
+
 test('a preview of a recorded final\'s values is that final\'s render', async () => {
   const [final] = data('finals.json');
   const { done } = await preview(JSON.stringify({ kind: 'preview', values: { ...final.values, 'render.preview_size': 240 } }));

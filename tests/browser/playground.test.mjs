@@ -463,6 +463,9 @@ test('playground:shots takes the captures set', async () => {
     const files = readdirSync(out);
     assert.ok(files.includes('grid.png'));
     assert.ok(files.some(f => f.startsWith('capture-mini-pylon-')) && files.some(f => f.startsWith('capture-wings-vdb-')), files.join(' '));
+    // The source side, one shot per tab of each capture.
+    for (const tab of ['dispersal', 'scroll', 'presence', 'sunlight', 'dive']) assert.ok(files.includes(`capture-wings-vdb-source-${tab}.png`), `capture-wings-vdb-source-${tab}.png in ${files.join(' ')}`);
+    for (const tab of ['ground', 'clutter', 'light', 'camera', 'pylon', 'render']) assert.ok(files.includes(`capture-mini-pylon-source-${tab}.png`), tab);
     assert.deepEqual(files.filter(f => f !== 'grid.png' && !f.startsWith('capture-')), []);
   } finally { rmSync(out, { recursive: true, force: true }); }
 });

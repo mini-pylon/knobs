@@ -128,11 +128,13 @@ function requestPath(req) {
 }
 
 // A request a mounted handler hands back. The body names the path and, when
-// the handler passed an error on, that error's message.
+// the handler passed an error on, that error's message. An error is logged
+// here too: the answer must not be the only place the cause survives.
 function handedBack(req, res, err) {
   if (res.writableEnded || res.headersSent) return;
   const path = requestPath(req);
   const message = err?.message ? String(err.message) : '';
+  if (err) console.error(message ? `${path}: ${message}` : `${path}: ${err}`);
   sendJson(res, err ? 500 : 404, { error: message ? `${path}: ${message}` : path });
 }
 
@@ -158,18 +160,22 @@ function mount(server, route, handler) {
   server.middlewares.use(route, seal(handler));
 }
 
-// Vite's middleware-mode error handler logs the error and calls next() with
-// nothing attached, which drops the message. Answer here instead.
+// Vite's middleware-mode error handler logs the error, sends the overlay, and
+// calls next() with nothing attached. Keep that layer, and answer from its
+// next so the cause does not fall through to the playground.
 function keepSourceError(middlewares) {
   const layer = middlewares.stack.find(entry => entry.handle?.name === 'viteErrorMiddleware')
     ?? middlewares.stack.find(entry => entry.handle?.length === 4);
   if (!layer) throw new Error('the wings-vdb fixture has no error handler');
+  const original = layer.handle;
   layer.handle = function sourceError(err, req, res, next) {
-    if (res.writableEnded || res.headersSent) {
-      next(err);
-      return;
-    }
-    handedBack(req, res, err);
+    original.call(this, err, req, res, () => {
+      if (res.writableEnded || res.headersSent) {
+        next(err);
+        return;
+      }
+      handedBack(req, res, err);
+    });
   };
 }
 

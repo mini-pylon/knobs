@@ -108,18 +108,30 @@ test('a draft body with invalid UTF-8 is refused and writes nothing', async () =
 });
 
 describe('source errors stay on the source prefix', { concurrency: 1 }, () => {
-  test('an unresolved import in a snapshot module is not the playground page', async () => {
+  test('an unresolved import in a snapshot module is logged and answered 500 with its cause', async () => {
     const served = await serveWings(source => {
       appendFileSync(join(source, 'src', 'main.js'), '\nimport "./missing-module.js";\n');
     });
+    const logged = [];
+    const write = console.error;
+    console.error = (...args) => {
+      logged.push(args.map(arg => typeof arg === 'string' ? arg : String(arg)).join(' '));
+      write(...args);
+    };
     try {
       const response = await fetch(`${served.site.url}captures/wings-vdb/source/src/main.js`);
       const text = await response.text();
-      assert.ok(response.status < 200 || response.status >= 300, `status ${response.status}: ${text.slice(0, 200)}`);
+      assert.equal(response.status, 500, text.slice(0, 300));
       assert.match(text, /src\/main\.js/);
       assert.match(text, /missing-module\.js/);
       assert.doesNotMatch(text, /knobs playground/);
+      const lines = logged.join('\n');
+      // Vite's own error layer logs this line and sends the overlay. The
+      // answer also names the request path, which that line does not.
+      assert.match(lines, /Internal server error/);
+      assert.match(lines, /\/captures\/wings-vdb\/source\/src\/main\.js/);
     } finally {
+      console.error = write;
       await served.close();
     }
   });

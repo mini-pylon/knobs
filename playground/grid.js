@@ -7,7 +7,7 @@
 //   ids=a,b,c              these scenarios, in place of a set
 // tab= opens every stage on that tab; w= and h= size the cells.
 // body[data-ready] marks every stage mounted or failed.
-import { openSourceTab, seedSource, sourceSeed, sourceUrl } from './fixtures/source-side.js';
+import { openSourceTab, seedSource, sourceDocumentError, sourceSeed, sourceUrl } from './fixtures/source-side.js';
 import { captureNames, captureOf, draftNames, exemplarNames } from './scenarios.js';
 
 const params = new URLSearchParams(location.search);
@@ -72,23 +72,36 @@ function cell(id, options = {}) {
   caption.append(label, why, open);
   figure.append(frame, caption);
   parent.append(figure);
+  const started = performance.now();
   return new Promise(resolve => {
     const poll = setInterval(() => {
       const body = frame.contentDocument?.body;
-      if (!body) return;
-      if (body.dataset.error) {
+      const giveUp = message => {
         figure.classList.add('failed');
-        why.textContent = body.dataset.error;
-      } else if (!body.dataset.ready) return;
-      clearInterval(poll);
-      resolve();
+        why.textContent = message;
+        clearInterval(poll);
+        resolve();
+      };
+      if (body?.dataset?.error) {
+        giveUp(body.dataset.error);
+        return;
+      }
+      if (body?.dataset?.ready) {
+        clearInterval(poll);
+        resolve();
+        return;
+      }
+      if (performance.now() - started >= 15000) {
+        giveUp(`${id}: the stage did not mount within 15000 ms`);
+      }
     }, 100);
   });
 }
 
-function shotFigure(record, tab) {
+function shotFigure(record, tab, cellWidth) {
   const figure = document.createElement('figure');
   figure.className = 'cell shot';
+  figure.style.width = `${cellWidth}px`;
   const shot = (record.shots ?? []).find(item => item.tab === tab && item.url);
   if (shot) {
     const img = document.createElement('img');
@@ -160,6 +173,8 @@ async function loadSource(figure, name, record, tab) {
     const loaded = waitForLoad(frame, 15000);
     frame.setAttribute('src', sourceUrl(name));
     await loaded;
+    const problem = sourceDocumentError(frame.contentDocument);
+    if (problem) throw new Error(problem);
     await openSourceTab({ tab }, frame.contentDocument);
     figure.dataset.ready = String(performance.now());
   } catch (error) {
@@ -176,20 +191,33 @@ async function captureRows() {
   try {
     for (const id of captureNames) {
       const name = id.startsWith('capture:') ? id.slice('capture:'.length) : id;
-      const record = await captureOf(name);
-      const tabs = (record.groups ?? []).filter(group => !group.hidden).map(group => group.name);
-      for (const tab of tabs) {
+      try {
+        const record = captureOf(name);
+        const tabs = (record.groups ?? []).filter(group => !group.hidden).map(group => group.name);
+        for (const tab of tabs) {
+          const row = document.createElement('section');
+          row.className = 'capture-row';
+          row.dataset.capture = name;
+          row.dataset.tab = tab;
+          const heading = document.createElement('h2');
+          heading.textContent = `capture:${name} · ${tab}`;
+          const source = sourceFigure(name, tab, rowWidth, rowHeight);
+          row.append(heading, shotFigure(record, tab, rowWidth), source);
+          cells.append(row);
+          sources.push({ figure: source, name, record, tab });
+          knobs.push(cell(`capture:${name}`, { tab, parent: row, width: rowWidth, height: rowHeight, className: 'cell knobs' }));
+        }
+      } catch (error) {
         const row = document.createElement('section');
-        row.className = 'capture-row';
+        row.className = 'capture-row failed';
         row.dataset.capture = name;
-        row.dataset.tab = tab;
         const heading = document.createElement('h2');
-        heading.textContent = `capture:${name} · ${tab}`;
-        const source = sourceFigure(name, tab, rowWidth, rowHeight);
-        row.append(heading, shotFigure(record, tab), source);
+        heading.textContent = `capture:${name}`;
+        const why = document.createElement('p');
+        why.className = 'why';
+        why.textContent = `${name}: ${error.message}`;
+        row.append(heading, why);
         cells.append(row);
-        sources.push({ figure: source, name, record, tab });
-        knobs.push(cell(`capture:${name}`, { tab, parent: row, width: rowWidth, height: rowHeight, className: 'cell knobs' }));
       }
     }
     await Promise.all([

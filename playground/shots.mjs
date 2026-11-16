@@ -11,7 +11,7 @@ import { parseArgs } from 'node:util';
 import { chromium } from 'playwright';
 import { closeAll, launch, repo } from '../tests/browser/lib/harness.mjs';
 import * as wingsVdb from './adapters/wings-vdb.mjs';
-import { openSourceTab, seedSource, SOURCE_MOUNTS, SOURCES, sourceSeed, sourceUrl } from './fixtures/source-side.js';
+import { openSourceTab, seedSource, SOURCE_MOUNTS, SOURCES, sourceDocumentError, sourceSeed, sourceUrl } from './fixtures/source-side.js';
 import { servePlayground } from './server.mjs';
 
 const { values } = parseArgs({ options: {
@@ -62,6 +62,7 @@ async function shootSource(id) {
   }
   const tabs = capture.groups.filter(group => !group.hidden).map(group => group.name);
   const args = project === wingsVdb.name ? wingsVdb.dev.chromiumArgs : [];
+  const pageUrl = new URL(sourceUrl(project), site.url).href;
   let sourceBrowser;
   try {
     sourceBrowser = await chromium.launch({
@@ -73,19 +74,25 @@ async function shootSource(id) {
     const pageErrors = [];
     page.on('pageerror', error => pageErrors.push(error.message));
     for (const tab of tabs) {
-      pageErrors.length = 0;
-      await page.goto(new URL(fontsPath, site.url).href);
-      await page.evaluate(seedSource, sourceSeed(project, capture, 'defaults', tab));
-      await page.goto(new URL(sourceUrl(project), site.url).href);
-      await page.evaluate(openSourceTab, { tab });
-      await page.waitForTimeout(800);
-      const file = join(out, `capture-${project}-source-${tab.replace(/[^\w.-]+/g, '_')}.png`);
-      await page.screenshot({ path: file });
-      console.log(file);
-      if (pageErrors.length) failures.push(`${id}: ${tab}: ${pageErrors.join('; ')}`);
+      try {
+        pageErrors.length = 0;
+        await page.goto(new URL(fontsPath, site.url).href);
+        await page.evaluate(seedSource, sourceSeed(project, capture, 'defaults', tab));
+        await page.goto(pageUrl);
+        const problem = await page.evaluate(sourceDocumentError);
+        if (problem) throw new Error(problem);
+        await page.evaluate(openSourceTab, { tab });
+        await page.waitForTimeout(800);
+        const file = join(out, `capture-${project}-source-${tab.replace(/[^\w.-]+/g, '_')}.png`);
+        await page.screenshot({ path: file });
+        console.log(file);
+        if (pageErrors.length) failures.push(`${id}: ${tab}: ${pageUrl}: ${pageErrors.join('; ')}`);
+      } catch (error) {
+        failures.push(`${id}: ${tab}: ${pageUrl}: ${error.message}`);
+      }
     }
   } catch (error) {
-    failures.push(`${id}: ${error.message}`);
+    failures.push(`${id}: ${pageUrl}: ${error.message}`);
   } finally {
     if (!sourceBrowser) return;
     try {
@@ -102,10 +109,18 @@ try {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
 
-  // The set's scenario ids, as the grid lists them.
+  // The set's scenario ids. Captures come from the scenario list, not from a
+  // grid of source cells: that grid would run every source page just to name them.
   const sets = new Set(['exemplars', 'seeds', 'drafts', 'captures', 'all']);
   let ids = values.only.split(',');
-  if (ids.length === 1 && sets.has(ids[0])) {
+  if (ids.length === 1 && ids[0] === 'captures') {
+    await page.goto(site.url);
+    const names = await page.evaluate(async () => {
+      const { captureNames } = await import('./scenarios.js');
+      return captureNames;
+    });
+    ids = names.map(name => name.startsWith('capture:') ? name : `capture:${name}`);
+  } else if (ids.length === 1 && sets.has(ids[0])) {
     await page.goto(`${site.url}grid.html?set=${ids[0]}&n=8`);
     await page.locator('body[data-ready]').waitFor({ timeout: 60000 });
     // Knobs cells only: a capture row's source and shot cells are not scenarios.
@@ -114,22 +129,35 @@ try {
   }
 
   for (const id of ids) {
-    errors.length = 0;
-    await page.goto(`${site.url}stage.html?s=${encodeURIComponent(id)}`);
-    await page.locator('body[data-ready], body[data-error]').waitFor({ timeout: 30000 });
-    const failed = await page.locator('body').getAttribute('data-error');
-    if (failed) { failures.push(`${id}: ${failed}`); continue; }
-    const tabs = page.locator('.term-tab');
-    const labels = await tabs.allInnerTexts();
-    const stem = id.replace(/[^\w.-]+/g, '-');
-    for (let i = 0; i < labels.length; i++) {
-      await tabs.nth(i).click();
-      await page.waitForTimeout(400);
-      const file = join(out, `${stem}-${String(i + 1).padStart(2, '0')}-${labels[i].replace(/[^\w.-]+/g, '_')}.png`);
-      await page.screenshot({ path: file });
-      console.log(file);
+    const stageUrl = `${site.url}stage.html?s=${encodeURIComponent(id)}`;
+    try {
+      errors.length = 0;
+      await page.goto(stageUrl);
+      await page.locator('body[data-ready], body[data-error]').waitFor({ timeout: 30000 });
+      const failed = await page.locator('body').getAttribute('data-error');
+      if (failed) {
+        failures.push(`${id}: ${stageUrl}: ${failed}`);
+        continue;
+      }
+      const tabs = page.locator('.term-tab');
+      const labels = await tabs.allInnerTexts();
+      const stem = id.replace(/[^\w.-]+/g, '-');
+      for (let i = 0; i < labels.length; i++) {
+        const tab = labels[i];
+        try {
+          await tabs.nth(i).click();
+          await page.waitForTimeout(400);
+          const file = join(out, `${stem}-${String(i + 1).padStart(2, '0')}-${tab.replace(/[^\w.-]+/g, '_')}.png`);
+          await page.screenshot({ path: file });
+          console.log(file);
+        } catch (error) {
+          failures.push(`${id}: ${tab}: ${stageUrl}: ${error.message}`);
+        }
+      }
+      if (errors.length) failures.push(`${id}: ${stageUrl}: ${errors.join('; ')}`);
+    } catch (error) {
+      failures.push(`${id}: ${stageUrl}: ${error.message}`);
     }
-    if (errors.length) failures.push(`${id}: ${errors.join('; ')}`);
   }
 
   for (const id of ids) {

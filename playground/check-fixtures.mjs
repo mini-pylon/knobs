@@ -8,8 +8,8 @@ import { parseArgs } from 'node:util';
 import { chromium } from 'playwright';
 import * as miniPylon from './adapters/mini-pylon.mjs';
 import * as wingsVdb from './adapters/wings-vdb.mjs';
-import { allowedRequest } from './fixtures/routes.mjs';
-import { defaultTab, openSourceTab, seedSource, SOURCE_MOUNTS, sourceSeed, sourceUrl } from './fixtures/source-side.js';
+import { allowedRequest, anotherOrigin } from './fixtures/routes.mjs';
+import { defaultTab, openSourceTab, seedSource, SOURCE_MOUNTS, sourceDocumentError, sourceSeed, sourceUrl } from './fixtures/source-side.js';
 import { servePlayground } from './server.mjs';
 
 const { values } = parseArgs({ options: { captures: { type: 'string' } } });
@@ -23,7 +23,8 @@ try {
     try {
       await checkProject(adapter);
     } catch (error) {
-      failures.push(`${adapter.name}: ${error.message}`);
+      const where = SOURCE_MOUNTS[adapter.name]?.source ?? '';
+      failures.push(where ? `${adapter.name}: ${where}: ${error.message}` : `${adapter.name}: ${error.message}`);
     }
   }
 } catch (error) {
@@ -56,12 +57,6 @@ async function fontsState() {
   return body.fonts;
 }
 
-function sameHost(url) {
-  const here = new URL(site.url);
-  const there = new URL(url);
-  return there.hostname === here.hostname && there.port === here.port;
-}
-
 async function checkProject(adapter) {
   const project = adapter.name;
   const capturePath = join(site.captures, project, 'capture.json');
@@ -72,29 +67,48 @@ async function checkProject(adapter) {
   }
   const state = await fontsState();
   if (!Array.isArray(adapter.dev?.chromiumArgs)) throw new Error('no dev.chromiumArgs');
+  const pageUrl = new URL(sourceUrl(project), site.url).href;
+  const tab = defaultTab(capture);
+  let currentTab = tab;
+  // The project stays directly in front of the message: the plan's check
+  // matches that wording. The tab and the page URL follow it.
+  const note = message => failures.push(`${project}: ${message} (${currentTab}, ${pageUrl})`);
   const browser = await chromium.launch({
     executablePath: process.env.KNOBS_CHROMIUM || undefined,
     args: adapter.dev.chromiumArgs,
   });
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-    const tab = defaultTab(capture);
     const fontsPath = SOURCE_MOUNTS['wings-vdb'].fonts;
-    await page.goto(new URL(fontsPath, site.url).href);
-    await page.evaluate(seedSource, sourceSeed(project, capture, 'defaults', tab));
-    watch(page, project, state);
-    await page.goto(new URL(sourceUrl(project), site.url).href);
-    await page.evaluate(openSourceTab, { tab });
-    if (project === miniPylon.name) await preview(page, project);
-    const labels = await page.locator('.term-tabs .term-tab').allInnerTexts();
-    for (const label of labels) {
-      await page.evaluate(openSourceTab, { tab: label });
-      await page.waitForTimeout(600);
-      if (project === wingsVdb.name) {
-        for (const problem of await pictures(page, label)) failures.push(`${project}: ${problem}`);
+    try {
+      await page.goto(new URL(fontsPath, site.url).href);
+      await page.evaluate(seedSource, sourceSeed(project, capture, 'defaults', tab));
+      watch(page, project, state, note);
+      await page.goto(pageUrl);
+      const problem = await page.evaluate(sourceDocumentError);
+      if (problem) throw new Error(problem);
+      await page.evaluate(openSourceTab, { tab });
+      if (project === miniPylon.name) {
+        const late = await preview(page);
+        if (late) note(late);
       }
+      const labels = await page.locator('.term-tabs .term-tab').allInnerTexts();
+      for (const label of labels) {
+        currentTab = label;
+        try {
+          await page.evaluate(openSourceTab, { tab: label });
+          await page.waitForTimeout(600);
+          if (project === wingsVdb.name) {
+            for (const found of await pictures(page, label)) note(found);
+          }
+        } catch (error) {
+          note(error.message);
+        }
+      }
+      console.log(`${project}: ${labels.length} tabs checked (${labels.join(', ')}; fonts: ${state})`);
+    } catch (error) {
+      note(error.message);
     }
-    console.log(`${project}: ${labels.length} tabs checked (${labels.join(', ')}; fonts: ${state})`);
   } finally {
     try {
       await browser.close();
@@ -104,7 +118,7 @@ async function checkProject(adapter) {
   }
 }
 
-function watch(page, project, state) {
+function watch(page, project, state, note) {
   page.on('request', request => {
     const url = request.url();
     if (url.startsWith('data:') || url.startsWith('blob:')) return;
@@ -112,37 +126,38 @@ function watch(page, project, state) {
     try {
       parsed = new URL(url);
     } catch {
-      failures.push(`${project}: requested another origin: ${url}`);
+      note(`requested another origin: ${url}`);
       return;
     }
-    if (!sameHost(url)) {
-      failures.push(`${project}: requested another origin: ${url}`);
+    if (anotherOrigin(site.url, url)) {
+      note(`requested another origin: ${url}`);
       return;
     }
     if (parsed.pathname === '/favicon.ico') return;
     if (!allowedRequest(parsed.pathname, project)) {
-      failures.push(`${project}: requested a root path outside the table: ${parsed.pathname}`);
+      note(`requested a root path outside the table: ${parsed.pathname}`);
     }
   });
-  page.on('pageerror', error => failures.push(`${project}: uncaught: ${error.message}`));
+  page.on('pageerror', error => note(`uncaught: ${error.message}`));
   page.on('console', message => {
     if (message.type() !== 'error') return;
     const where = message.location()?.url ?? '';
     let path = '';
     try { path = where ? new URL(where).pathname : ''; } catch { path = ''; }
     if (state === 'fallback' && path.startsWith('/fonts/')) return;
-    failures.push(`${project}: console error: ${message.text()} (${path})`);
+    note(`console error: ${message.text()} (${path})`);
   });
 }
 
-async function preview(page, project) {
+async function preview(page) {
   try {
     await page.waitForFunction(() => {
       const img = document.querySelector('img.render');
       return Boolean(img && img.complete && img.naturalWidth > 0);
     }, null, { timeout: 15000 });
+    return null;
   } catch {
-    failures.push(`${project}: the preview image never loaded`);
+    return 'the preview image never loaded';
   }
 }
 

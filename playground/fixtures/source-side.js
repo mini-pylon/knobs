@@ -43,6 +43,30 @@ function knownSourceTab(project, capture, tab) {
   return false;
 }
 
+// A loaded source frame that is not the project's page. The snapshot 404 is
+// JSON. A page still building its drawer (HTML, a script, no error JSON) is
+// left for openSourceTab. Names nothing outside itself, so page.evaluate can
+// carry it.
+export function sourceDocumentError(doc = document) {
+  const type = String(doc.contentType || '');
+  const html = type === 'text/html' || type.startsWith('text/html;');
+  if (html && doc.querySelector('.term')) return null;
+  const raw = String(doc.body?.innerText ?? doc.documentElement?.textContent ?? '').trim();
+  let quoted = '';
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+  if (start !== -1 && end > start) {
+    try {
+      const parsed = JSON.parse(raw.slice(start, end + 1));
+      if (parsed && typeof parsed.error === 'string') quoted = parsed.error;
+    } catch { /* the body is not the snapshot's JSON */ }
+  }
+  if (html && doc.scripts?.length && !quoted) return null;
+  if (quoted) return quoted;
+  if (raw) return raw;
+  return 'the source document is not the page';
+}
+
 export function defaultTab(capture) {
   const name = visibleGroups(capture)[0];
   if (!name) throw new Error('the capture has no visible group');

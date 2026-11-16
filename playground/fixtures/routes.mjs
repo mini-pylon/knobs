@@ -120,7 +120,9 @@ export function wingsRoutes({ sourceDir, fonts }) {
 
 function missingSnapshot(project) {
   return (req, res) => {
-    sendJson(res, 404, { error: `no ${project} snapshot: run npm run playground:capture -- ${project}` });
+    sendJson(res, 404, {
+      error: `no ${project} snapshot was mounted when the server started: run npm run playground:capture -- ${project}, then restart the playground`,
+    });
   };
 }
 

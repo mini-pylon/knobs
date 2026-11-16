@@ -5,7 +5,7 @@
 // capture's data. Everything that picks what is shown lives in the query
 // (s, g, set, tab, w, view, side), so a view can be linked or reloaded.
 import { defineControls } from 'knobs';
-import { defaultTab, openSourceTab, otherSideTab, seedSource, SOURCE_MOUNTS, SOURCES, sourceSeed, sourceUrl } from './fixtures/source-side.js';
+import { defaultTab, openSourceTab, otherSideTab, seedSource, SOURCE_MOUNTS, SOURCES, sourceDocumentError, sourceSeed, sourceUrl } from './fixtures/source-side.js';
 import { captureNames, draftNames, exemplarNames, JSON_KEY, resolveScenario } from './scenarios.js';
 
 const $ = selector => document.querySelector(selector);
@@ -52,9 +52,35 @@ function frameKnobs() {
   const stageQuery = new URLSearchParams({ s: scenario });
   for (const key of ['g', 'tab', 'set']) if (params.get(key)) stageQuery.set(key, params.get(key));
   frame.src = `./stage.html?${stageQuery}`;
+  // The deadline starts here, not on the frame's load event: a module that
+  // never finishes evaluating holds that event off.
+  const started = performance.now();
+  const wait = setInterval(() => {
+    const s = stage();
+    const mounted = s && (s.error || frame.contentDocument?.body?.dataset?.ready);
+    if (!mounted) {
+      if (performance.now() - started < 15000) return;
+      clearInterval(wait);
+      showError(`${scenario}: the stage did not mount within 15000 ms`);
+      return;
+    }
+    clearInterval(wait);
+    lastKey = '';
+    if (s.error) showError(s.error);
+    else if (!edited) textarea.value = JSON.stringify(rawGroups(s.groups), null, 2);
+    render();
+  }, 50);
 }
-// A capture waits until its side is known. Anything else frames at once.
-if (!scenario.startsWith('capture:')) frameKnobs();
+// An unknown side, or source on something other than a capture, is refused
+// before the frame is pointed anywhere. No side parameter stays the knobs stage.
+const askedSide = params.get('side');
+if (askedSide && askedSide !== 'source' && askedSide !== 'knobs') {
+  showError(`unknown side: ${askedSide}`);
+} else if (askedSide === 'source' && !scenario.startsWith('capture:')) {
+  showError(`${scenario} is not a capture`);
+} else if (!scenario.startsWith('capture:')) {
+  frameKnobs();
+}
 
 function chosenTab(capture) {
   return params.get('tab') || defaultTab(capture);
@@ -358,24 +384,15 @@ frame.addEventListener('load', () => {
     const href = frame.contentWindow?.location?.href ?? '';
     if (!href.includes(prefix)) return;
     const tab = chosenTab(capture);
+    const problem = sourceDocumentError(frame.contentDocument);
+    if (problem) {
+      showError(`${capture.name}: ${problem}`);
+      return;
+    }
     openSourceTab({ tab }, frame.contentDocument).then(() => {
       document.body.dataset.sourceReady = tab;
-    }).catch(error => showError(`${capture.name}: ${tab}: ${error.message}`));
-    return;
+    }).catch(error => showError(`${capture.name}: ${tab}: ${href}: ${error.message}`));
   }
-  // The empty frame fires before a capture's side is known. It is not a stage.
-  const href = frame.contentWindow?.location?.href ?? '';
-  if (!frame.src || href === 'about:blank') return;
-  lastKey = '';
-  const wait = setInterval(() => {
-    const s = stage();
-    if (!s) return;
-    if (!s.error && !frame.contentDocument.body.dataset.ready) return;
-    clearInterval(wait);
-    if (s.error) showError(s.error);
-    else if (!edited) textarea.value = JSON.stringify(rawGroups(s.groups), null, 2);
-    render();
-  }, 50);
 });
 setInterval(render, 300);
 showView(current);

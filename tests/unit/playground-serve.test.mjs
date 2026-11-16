@@ -314,6 +314,28 @@ describe('source errors stay on the source prefix', { concurrency: 1 }, () => {
   });
 });
 
+test('a source prefix with no snapshot says it was not mounted when the server started', async () => {
+  const root = mkdtempSync(join(repo, 'tests', '.tmp', 'serve-'));
+  const drafts = join(root, 'drafts');
+  const captures = join(root, 'captures');
+  const fonts = join(root, 'fonts');
+  mkdirSync(drafts);
+  mkdirSync(captures);
+  mkdirSync(fonts);
+  const site = await servePlayground({ drafts, captures, fonts, logLevel: 'error' });
+  try {
+    for (const project of ['wings-vdb', 'mini-pylon']) {
+      const response = await fetch(`${site.url}captures/${project}/source/`);
+      const body = await response.json();
+      assert.equal(response.status, 404);
+      assert.equal(body.error, `no ${project} snapshot was mounted when the server started: run npm run playground:capture -- ${project}, then restart the playground`);
+    }
+  } finally {
+    await site.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('a draft whose name uses a source storage prefix is refused with its name', async () => {
   const root = mkdtempSync(join(repo, 'tests', '.tmp', 'serve-'));
   const drafts = join(root, 'drafts');

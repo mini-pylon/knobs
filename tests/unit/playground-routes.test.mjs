@@ -6,7 +6,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { allowedRequest, DEFAULTS_REFUSED, fontState, ROOT_PATHS, wingsRoutes } from '../../playground/fixtures/routes.mjs';
+import { allowedRequest, DEFAULTS_REFUSED, fixturesPlugin, fontState, ROOT_PATHS, rootMounts, wingsRoutes } from '../../playground/fixtures/routes.mjs';
+import { BASE } from '../../playground/fixtures/wings-vdb/vite.mjs';
+import { PREFIX } from '../../playground/fixtures/mini-pylon/api.mjs';
 
 const repo = fileURLToPath(new URL('../..', import.meta.url));
 mkdirSync(join(repo, 'tests', '.tmp'), { recursive: true });
@@ -81,6 +83,29 @@ test('the fonts route serves the two faces from the fonts folder, and says local
   assert.equal(fontState(fonts), 'local');
   assert.equal(fontState(noFonts), 'fallback');
   assert.equal((await fetch(`${wings.url}/wings-wide.svg`)).headers.get('content-type'), 'image/svg+xml');
+});
+
+test('a root path with no handler is refused, and the fixture mounts each root path and source prefix', async () => {
+  assert.throws(() => rootMounts([{ path: '/extra', owner: 'wings-vdb' }], {}), /ROOT_PATHS has no handler for \/extra/);
+  const root = mkdtempSync(join(repo, 'tests', '.tmp', 'routes-'));
+  const captures = join(root, 'captures');
+  const fontsDir = join(root, 'fonts');
+  mkdirSync(captures);
+  mkdirSync(fontsDir);
+  const mounted = [];
+  const server = { httpServer: null, middlewares: { use(route) { mounted.push(route); } } };
+  const plugin = fixturesPlugin({ captures, fonts: fontsDir, logLevel: 'error' });
+  try {
+    await plugin.configureServer(server);
+    assert.equal(plugin.boot.error, null);
+    for (const entry of ROOT_PATHS) assert.ok(mounted.includes(entry.path), `${entry.path} not in ${mounted.join(', ')}`);
+    assert.ok(mounted.includes(BASE), `wings source not mounted from BASE: ${mounted.join(', ')}`);
+    assert.ok(mounted.includes(PREFIX), `mini-pylon source not mounted from PREFIX: ${mounted.join(', ')}`);
+    assert.ok(mounted.includes(BASE.replace(/source\/$/, 'fonts')));
+  } finally {
+    await plugin.closeServer();
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('the root-path table names each path a page asks for outside its prefix, and whose it is', () => {

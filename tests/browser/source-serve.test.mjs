@@ -13,7 +13,9 @@ import { join } from 'node:path';
 import { closeAll, launch, newPage, repo } from './lib/harness.mjs';
 import { writeCaptures } from './lib/captures.mjs';
 import { servePlayground } from '../../playground/server.mjs';
-import { allowedRequest } from '../../playground/fixtures/routes.mjs';
+import { allowedRequest, ROOT_PATHS } from '../../playground/fixtures/routes.mjs';
+import { BASE } from '../../playground/fixtures/wings-vdb/vite.mjs';
+import { PREFIX } from '../../playground/fixtures/mini-pylon/api.mjs';
 import { openSourceTab, seedSource, sourceSeed } from '../../playground/fixtures/source-side.js';
 
 mkdirSync(join(repo, 'tests', '.tmp'), { recursive: true });
@@ -71,7 +73,9 @@ test('the wings-vdb page loads under its prefix with its stubs, and each root pa
     assert.equal(await page.locator('.detail').innerText(), 'Wings, the stand-in.');
     assert.equal(await page.locator('.term-viz canvas').count(), 1);
     const paths = requests.filter(u => u.origin === origin()).map(u => u.pathname);
-    for (const path of ['/captures/wings-vdb/source/src/main.js', '/captures/wings-vdb/source/cloud-fallback.svg', '/wings-wide.svg', '/__wings/defaults', '/fonts/ABCArealVariable.woff2']) assert.ok(paths.includes(path), `requested ${path}:\n${paths.join('\n')}`);
+    const wingsRoots = ROOT_PATHS.filter(entry => entry.owner === 'wings-vdb');
+    for (const path of [`${BASE}src/main.js`, `${BASE}cloud-fallback.svg`]) assert.ok(paths.includes(path), `requested ${path}:\n${paths.join('\n')}`);
+    for (const entry of wingsRoots) assert.ok(paths.some(path => path === entry.path || path.startsWith(entry.path)), `requested ${entry.path}:\n${paths.join('\n')}`);
     assert.ok(paths.some(p => p.startsWith('/captures/wings-vdb/source/playground/fixtures/wings-vdb/stubs/chat.js') || p.endsWith('/stubs/chat.js')), `the chat stub is served:\n${paths.join('\n')}`);
     assert.ok(!paths.some(p => p.endsWith('/src/chat.js') || p.endsWith('/src/dev-report.js')), 'the real chat.js and dev-report.js are never asked for');
     assert.equal(responses.get('/wings-wide.svg'), 200);
@@ -91,7 +95,8 @@ test('the mini-pylon page loads under its prefix, its /api calls reach the stand
     assert.equal(await page.locator('body').getAttribute('data-preview'), 'done 480 0');
     assert.ok(await page.locator('img.render').evaluate(img => img.complete && img.naturalWidth === 256), 'the swatch loads');
     const paths = requests.filter(u => u.origin === origin()).map(u => u.pathname);
-    for (const path of ['/captures/mini-pylon/source/tweak.js', '/captures/mini-pylon/source/tweak.css', '/api/schema', '/api/render']) assert.ok(paths.includes(path), `requested ${path}`);
+    const apiRoot = ROOT_PATHS.find(entry => entry.owner === 'mini-pylon').path;
+    for (const path of [`${PREFIX}/tweak.js`, `${PREFIX}/tweak.css`, `${apiRoot}schema`, `${apiRoot}render`]) assert.ok(paths.includes(path), `requested ${path}`);
     assert.ok(paths.some(p => p.startsWith('/api/jobs/')));
     assert.ok(paths.some(p => p.startsWith('/captures/mini-pylon/source/out/previews/')));
     assert.deepEqual(errors.map(e => e.text), []);
@@ -122,9 +127,17 @@ test('the wings-vdb fixture\'s HMR client connects on the playground\'s own port
     assert.ok(sockets.length >= 1, 'an HMR socket opened');
     for (const url of sockets) {
       assert.equal(url.port, String(site.port), url.href);
-      assert.equal(url.pathname, '/captures/wings-vdb/source/', url.href);
+      assert.equal(url.pathname, BASE, url.href);
     }
   } finally { await page.context().close(); }
+});
+
+test('every root path is answered by its fixture, not by the playground page', async () => {
+  for (const entry of ROOT_PATHS) {
+    const response = await fetch(`${site.url}${entry.path.slice(1)}`);
+    const text = await response.text();
+    assert.doesNotMatch(text, /<title>knobs playground<\/title>/, `${entry.path} ${response.status} ${text.slice(0, 120)}`);
+  }
 });
 
 test('the playground\'s own pages are still the playground\'s while the fixtures are mounted', async () => {
@@ -147,11 +160,17 @@ test('the source pages and their root paths answer a proxy\'s allowed host, and 
     req.end();
   });
   try {
-    const page = await call('/captures/wings-vdb/source/', 'knobs.example.test');
+    const page = await call(BASE, 'knobs.example.test');
     assert.equal(page.status, 200);
-    assert.match(page.text, /src="\/captures\/wings-vdb\/source\/src\/main\.js"/);
-    for (const path of ['/captures/wings-vdb/source/src/main.js', '/wings-wide.svg', '/api/schema', '/captures/mini-pylon/source/']) {
+    assert.match(page.text, new RegExp(`src="${BASE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}src/main\\.js"`));
+    const apiRoot = ROOT_PATHS.find(entry => entry.owner === 'mini-pylon').path;
+    const svg = ROOT_PATHS.find(entry => entry.owner === 'wings-vdb' && !entry.path.endsWith('/'));
+    for (const path of [`${BASE}src/main.js`, svg.path, `${apiRoot}schema`, `${PREFIX}/`]) {
       assert.equal((await call(path, 'knobs.example.test')).status, 200, path);
+    }
+    for (const entry of ROOT_PATHS) {
+      const response = await call(entry.path, 'knobs.example.test');
+      assert.doesNotMatch(response.text, /knobs playground/, entry.path);
     }
     const refused = await call('/captures/wings-vdb/source/', 'evil.example');
     assert.equal(refused.status, 403);

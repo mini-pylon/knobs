@@ -3,8 +3,8 @@
 // drawer calls). The mini-pylon stand-in is mounted beside them.
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { miniPylon } from './mini-pylon/api.mjs';
-import { wingsFixture } from './wings-vdb/vite.mjs';
+import { miniPylon, PREFIX } from './mini-pylon/api.mjs';
+import { BASE, wingsFixture } from './wings-vdb/vite.mjs';
 
 export const ROOT_PATHS = [
   { path: '/wings-wide.svg', owner: 'wings-vdb' },
@@ -14,6 +14,15 @@ export const ROOT_PATHS = [
 ];
 export const FONTS = ['ABCArealVariable.woff2', 'ABCArealMonoVariable.woff2'];
 export const DEFAULTS_REFUSED = 'defaults are not saved in the knobs fixture';
+
+// One handler per ROOT_PATHS entry. A new entry with none fails at start.
+export function rootMounts(entries, handlers) {
+  return entries.map(entry => {
+    const handler = handlers[entry.path];
+    if (typeof handler !== 'function') throw new Error(`ROOT_PATHS has no handler for ${entry.path}`);
+    return [entry.path, handler];
+  });
+}
 
 export function allowedRequest(pathname, project) {
   const source = `/captures/${project}/source/`;
@@ -178,25 +187,23 @@ export function fixturesPlugin({ captures, fonts, allowedHosts = [], logLevel = 
         if (existsSync(join(wingsSource, 'index.html'))) {
           wings = await wingsFixture({ sourceDir: wingsSource, httpServer: server.httpServer, allowedHosts, logLevel });
           keepSourceError(wings.middlewares);
-          mount(server, '/captures/wings-vdb/source', wings.middlewares);
+          mount(server, BASE, wings.middlewares);
         } else {
-          mount(server, '/captures/wings-vdb/source', missingSnapshot('wings-vdb'));
+          mount(server, BASE, missingSnapshot('wings-vdb'));
         }
         const routes = wingsRoutes({ sourceDir: wingsSource, fonts });
-        mount(server, '/captures/wings-vdb/fonts', routes.fontState);
-        mount(server, '/wings-wide.svg', routes.svg);
-        mount(server, '/fonts', routes.fonts);
-        mount(server, '/__wings', routes.wings);
+        mount(server, BASE.replace(/source\/$/, 'fonts'), routes.fontState);
         const pylonSource = join(captures, 'mini-pylon', 'source');
-        if (existsSync(join(pylonSource, 'data', 'schema.json'))) {
-          const mini = miniPylon(pylonSource);
-          mount(server, '/captures/mini-pylon/source', mini.files);
-          mount(server, '/api', mini.api);
-        } else {
-          const missing = missingSnapshot('mini-pylon');
-          mount(server, '/captures/mini-pylon/source', missing);
-          mount(server, '/api', missing);
-        }
+        const mini = existsSync(join(pylonSource, 'data', 'schema.json')) ? miniPylon(pylonSource) : null;
+        if (mini) mount(server, PREFIX, mini.files);
+        else mount(server, PREFIX, missingSnapshot('mini-pylon'));
+        const api = mini ? mini.api : missingSnapshot('mini-pylon');
+        for (const [path, handler] of rootMounts(ROOT_PATHS, {
+          '/wings-wide.svg': routes.svg,
+          '/fonts/': routes.fonts,
+          '/__wings/': routes.wings,
+          '/api/': api,
+        })) mount(server, path, handler);
       } catch (error) {
         const opened = wings;
         wings = null;

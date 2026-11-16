@@ -38,13 +38,17 @@ function scientific(mantissa, exponent) {
   return `${mantissa}e${sign}${String(Math.abs(exponent)).padStart(2, '0')}`;
 }
 
+// JSON.parse's reviver. A number's type comes from its source text.
+export function revive(_key, value, context) {
+  if (typeof value !== 'number') return value;
+  const source = context?.source;
+  if (typeof source !== 'string') throw new Error('a JSON number has no source text');
+  if (!/^-?\d+$/.test(source)) return new PyNum(value, 'float');
+  return new PyNum(Object.is(value, -0) ? 0 : value, 'int');
+}
+
 export function loads(text) {
-  return JSON.parse(text, (_key, value, context) => {
-    if (typeof value !== 'number') return value;
-    const source = context?.source ?? '';
-    if (!/^-?\d+$/.test(source)) return new PyNum(value, 'float');
-    return new PyNum(Object.is(value, -0) ? 0 : value, 'int');
-  });
+  return JSON.parse(text, revive);
 }
 
 function dumpString(text) {
@@ -159,6 +163,13 @@ function asPy(value, typeName) {
   return value;
 }
 
+// A number's default, min and max are int or float. Anything else is not a number.
+function asNumber(value, typeName, path, field) {
+  if (typeName === 'int' || typeName === 'float') return asPy(value, typeName);
+  const name = typeof typeName === 'string' ? `'${typeName}'` : 'missing';
+  throw new Error(`types.json: ${path} ${field} is ${name}, not int or float`);
+}
+
 export function typedVars(schema, types) {
   if (!schema || typeof schema !== 'object' || Array.isArray(schema) || !Array.isArray(schema.groups)) {
     throw new Error('schema.json has no groups');
@@ -178,10 +189,16 @@ export function typedVars(schema, types) {
       const path = `${group.name}.${variable.key}`;
       const info = types[path];
       if (!info) throw new Error(`types.json has no ${path}`);
-      const out = { path, type: variable.type, default: asPy(variable.default, info.default) };
+      const out = {
+        path,
+        type: variable.type,
+        default: variable.type === 'number'
+          ? asNumber(variable.default, info.default, path, 'default')
+          : asPy(variable.default, info.default),
+      };
       if (variable.type === 'number') {
-        out.min = asPy(variable.min, info.min);
-        out.max = asPy(variable.max, info.max);
+        out.min = asNumber(variable.min, info.min, path, 'min');
+        out.max = asNumber(variable.max, info.max, path, 'max');
       }
       if (variable.choices) out.choices = variable.choices;
       vars.push(out);

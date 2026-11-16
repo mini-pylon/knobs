@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { snapshot } from '../../playground/adapters/common.mjs';
 import * as miniPylon from '../../playground/adapters/mini-pylon.mjs';
-import { coerce, dumps, floatRepr, loads, PyNum, resolve, typedVars } from '../../playground/fixtures/mini-pylon/python.mjs';
+import { coerce, dumps, floatRepr, loads, PyNum, resolve, revive, typedVars } from '../../playground/fixtures/mini-pylon/python.mjs';
 
 const repo = fileURLToPath(new URL('../..', import.meta.url));
 const fixtures = join(repo, 'tests', 'fixtures', 'captures');
@@ -35,6 +35,47 @@ test('loads tells an int from a float by its text, as json.loads does', () => {
   assert.equal(parsed.g, true);
   assert.equal(parsed.h, null);
   assert.deepEqual(parsed.i.map(n => n.type), ['int', 'float']);
+});
+
+test('a JSON number with no source text is refused, not read as a float', () => {
+  assert.throws(() => revive('n', 1, undefined), { message: 'a JSON number has no source text' });
+  assert.throws(() => revive('n', 1, {}), { message: 'a JSON number has no source text' });
+  assert.equal(revive('n', 1, { source: '1' }).type, 'int');
+  assert.equal(revive('n', 1.5, { source: '1.5' }).type, 'float');
+});
+
+function numberSchema(types) {
+  return typedVars(
+    { groups: [{ name: 'g', vars: [{ key: 'n', type: 'number', default: 1, min: 0, max: 2 }] }] },
+    { 'g.n': types },
+  );
+}
+
+test('typedVars refuses a number type other than int or float, naming the path and the field', () => {
+  assert.throws(() => numberSchema({ default: 'str', min: 'int', max: 'int' }), { message: "types.json: g.n default is 'str', not int or float" });
+  assert.throws(() => numberSchema({ default: 'int', min: 'bool', max: 'int' }), { message: "types.json: g.n min is 'bool', not int or float" });
+  assert.throws(() => numberSchema({ default: 'float', min: 'int', max: 'bytes' }), { message: "types.json: g.n max is 'bytes', not int or float" });
+  assert.throws(() => numberSchema({ min: 'int', max: 'float' }), { message: 'types.json: g.n default is missing, not int or float' });
+});
+
+test('a choice or colour keeps a str default, and a toggle keeps an int', () => {
+  const vars = typedVars({
+    groups: [{ name: 'g', vars: [
+      { key: 'c', type: 'choice', default: 'sky', choices: ['sky'] },
+      { key: 'k', type: 'color', default: '#112233' },
+      { key: 't', type: 'toggle', default: 1 },
+    ] }],
+  }, {
+    'g.c': { default: 'str' },
+    'g.k': { default: 'str' },
+    'g.t': { default: 'int' },
+  });
+  assert.equal(vars.find(variable => variable.path === 'g.c').default, 'sky');
+  assert.equal(vars.find(variable => variable.path === 'g.k').default, '#112233');
+  const toggle = vars.find(variable => variable.path === 'g.t').default;
+  assert.ok(toggle instanceof PyNum);
+  assert.equal(toggle.value, 1);
+  assert.equal(toggle.type, 'int');
 });
 
 test('dumps writes json.dumps(sort_keys=True): sorted keys, Python separators, Python floats, ASCII only', () => {

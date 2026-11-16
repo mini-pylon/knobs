@@ -132,11 +132,34 @@ test('the wings-vdb fixture\'s HMR client connects on the playground\'s own port
   } finally { await page.context().close(); }
 });
 
+// What each root path's own handler answers. A body that merely is not the
+// playground page would also pass for an empty 200 or the wrong 404.
+function assertFixtureAnswer(entry, { status, text, type }) {
+  if (entry.path === '/wings-wide.svg') {
+    assert.equal(status, 200, entry.path);
+    assert.equal(type, 'image/svg+xml', entry.path);
+    assert.match(text, /<svg/, entry.path);
+    return;
+  }
+  if (entry.path === '/fonts/' || entry.path === '/__wings/') {
+    assert.equal(status, 404, entry.path);
+    assert.equal(text, 'not found', entry.path);
+    return;
+  }
+  if (entry.path === '/api/') {
+    assert.equal(status, 404, entry.path);
+    assert.equal(text, '{"error":"not found"}', entry.path);
+    return;
+  }
+  assert.fail(`ROOT_PATHS entry ${entry.path} has no pinned answer`);
+}
+
 test('every root path is answered by its fixture, not by the playground page', async () => {
   for (const entry of ROOT_PATHS) {
     const response = await fetch(`${site.url}${entry.path.slice(1)}`);
     const text = await response.text();
     assert.doesNotMatch(text, /<title>knobs playground<\/title>/, `${entry.path} ${response.status} ${text.slice(0, 120)}`);
+    assertFixtureAnswer(entry, { status: response.status, text, type: response.headers.get('content-type') });
   }
 });
 
@@ -154,7 +177,7 @@ test('the source pages and their root paths answer a proxy\'s allowed host, and 
     const req = request(`${proxied.url.replace(/\/$/, '')}${path}`, { headers: { host } }, res => {
       let text = '';
       res.on('data', chunk => { text += chunk; });
-      res.on('end', () => resolve({ status: res.statusCode, text }));
+      res.on('end', () => resolve({ status: res.statusCode, text, type: res.headers['content-type'] }));
     });
     req.on('error', reject);
     req.end();
@@ -171,6 +194,7 @@ test('the source pages and their root paths answer a proxy\'s allowed host, and 
     for (const entry of ROOT_PATHS) {
       const response = await call(entry.path, 'knobs.example.test');
       assert.doesNotMatch(response.text, /knobs playground/, entry.path);
+      assertFixtureAnswer(entry, response);
     }
     const refused = await call('/captures/wings-vdb/source/', 'evil.example');
     assert.equal(refused.status, 403);

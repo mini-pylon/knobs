@@ -2,7 +2,8 @@
 //   set=exemplars          every exemplar (the default)
 //   set=seeds&from=1&n=12  a run of random seeds (g sets their group count)
 //   set=drafts             every draft in the drafts folder
-//   set=captures           one row per visible tab: the shot, the source page, the knobs page
+//   set=captures           one row per visible tab: the source page, the knobs page, and
+//                          with fixtures=1 the shot of the original drawer before them
 //   set=all                stress, every exemplar, draft and capture, and 8 seeds
 //   ids=a,b,c              these scenarios, in place of a set
 // tab= opens every stage on that tab; w= and h= size the cells.
@@ -12,6 +13,8 @@ import { captureNames, captureOf, draftNames, exemplarNames } from './scenarios.
 
 const params = new URLSearchParams(location.search);
 const set = params.get('set') ?? 'exemplars';
+// The shots of the original drawer are test fixtures, shown only with fixtures=1.
+const fixtures = params.get('fixtures') === '1';
 const from = Number(params.get('from') ?? 1);
 const count = Number(params.get('n') ?? 12);
 const seeds = n => Array.from({ length: n }, (_, i) => `random:${from + i}`);
@@ -202,7 +205,7 @@ async function captureRows() {
           const heading = document.createElement('h2');
           heading.textContent = `capture:${name} · ${tab}`;
           const source = sourceFigure(name, tab, rowWidth, rowHeight);
-          row.append(heading, shotFigure(record, tab, rowWidth), source);
+          row.append(heading, ...(fixtures ? [shotFigure(record, tab, rowWidth)] : []), source);
           cells.append(row);
           sources.push({ figure: source, name, record, tab });
           knobs.push(cell(`capture:${name}`, { tab, parent: row, width: rowWidth, height: rowHeight, className: 'cell knobs' }));

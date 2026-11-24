@@ -12,18 +12,18 @@
     <label>scenario <select class="scenario"></select></label>
     <label class="seed-field">seed <input class="seed" type="number" min="1" step="1"></label>
     <label class="seed-field">groups <input class="count" type="number" min="1" max="12" step="1" placeholder="any"></label>
+    <button type="button" class="reroll">reroll</button>
     <a class="grid-link" href="./grid.html">grid</a>
   </header>
   <main class="panes">
-    <section class="source" aria-label="Source">
+    <!-- The schema editor is hidden for now; ?editor=1 shows it (shell.js). -->
+    <section class="source" aria-label="Source" hidden>
       <div class="pane-head">
         <span>schema</span>
-        <button type="button" class="reroll">reroll</button>
         <button type="button" class="apply">apply</button>
       </div>
       <p class="hint">Edit the groups as JSON and apply. An exemplar's picture or extension stays behind: an edited schema mounts on its own.</p>
       <textarea spellcheck="false" aria-label="Schema JSON"></textarea>
-      <pre class="error" hidden></pre>
       <details class="paste">
         <summary>paste a draft</summary>
         <p class="hint">What an agent wrote for a project, shaped like an exemplar: a controls.js that exports <code>groups</code>, and a visual.js or an extension.js. It is saved to the drafts folder and mounted with its picture.</p>
@@ -45,6 +45,7 @@
         <button type="button" data-w="1280">1280</button>
         <button type="button" data-w="">fill</button>
       </div>
+      <pre class="error" hidden></pre>
       <div class="frame-box"><iframe class="stage" title="Stage"></iframe></div>
     </section>
     <section class="views" aria-label="System views">

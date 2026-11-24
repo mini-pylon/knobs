@@ -23,15 +23,17 @@ refuses the requests.
 ## Pages
 
 - **`/`, the shell.** Pick a scenario. The stage shows the drawer mounted in a real page, at
-  390, 768 or 1280 px or the full width. The source pane holds the schema as JSON; edit it and
-  apply to remount. The right-hand views read the live stage:
+  390, 768 or 1280 px or the full width. The source pane, hidden for now, holds the schema as
+  JSON; edit it and apply to remount. Add `editor=1` to the query to show it. The right-hand
+  views read the live stage:
   - **schema** lists every group and control, with type, range and default.
   - **state** shows what is changed from the defaults (what save would write) and every live value.
   - **events** logs each value change.
   - **commands** lists the pages, commands, pictures and status an extension adds.
-  - **capture**, for a capture only: where it came from, a value-set picker, the
-    `source | knobs` switch and the fixture line, what did not translate, and shots of the
-    project's own drawer beside the stage. `side=source` frames the project's own page.
+  - **capture**, for a capture only: where it came from, a value-set picker, and the
+    `source | knobs` switch and the fixture line. What did not translate and the shots of the
+    project's own drawer are test fixtures, listed only with `fixtures=1`. `side=source` frames
+    the project's own page.
 - **`/grid.html`, the grid.** Many stages side by side: `set=exemplars`, `set=seeds&from=1&n=12`,
   `set=drafts`, `set=captures`, `set=all`, or `ids=stress,random:7`. `tab=` opens every stage on
   the same tab.
@@ -49,7 +51,7 @@ refuses the requests.
 | `exemplar:<name>` | An exemplar from `skills/knobs/exemplars/`, with its picture or extension |
 | `draft:<name>` | A draft from the drafts folder: what an agent wrote for a project |
 | `capture:<name>` | A project's own drawer from the captures folder. `set=` names the value set it mounts with (`defaults` if none) |
-| `json` | The schema last applied from the source pane |
+| `json` | The schema last applied from the source pane (listed only with `editor=1`) |
 
 ## Drafts
 
@@ -61,8 +63,8 @@ Each draft becomes a scenario as soon as it is on disk.
 To get a draft in:
 
 - have the agent write the folder into the drafts folder, or
-- paste the files into **paste a draft** in the shell's source pane, which saves them there and
-  mounts the draft.
+- paste the files into **paste a draft** in the shell's source pane (`editor=1`), which saves
+  them there and mounts the draft.
 
 `/grid.html?set=drafts` shows every draft. `npm run playground:shots -- --only drafts` saves each
 one's tabs.
@@ -108,8 +110,8 @@ capture with those values as file values (`defineControls(groups, values)`).
 Their dev servers: wings-vdb on port 5350 (Chromium gets the Vulkan flags headless WebGL needs;
 each shot takes about 20 seconds), mini-pylon's tweak server on 5371.
 
-`/grid.html?set=captures` shows one row per visible tab: the shot, the source page and the
-knobs page. `npm run playground:shots -- --only captures` saves each knobs tab, and each source
+`/grid.html?set=captures` shows one row per visible tab: the source page and the knobs page,
+with the shot of the original drawer before them when the query has `fixtures=1`. `npm run playground:shots -- --only captures` saves each knobs tab, and each source
 tab as `capture-<project>-source-<tab>.png`.
 
 ### The source side

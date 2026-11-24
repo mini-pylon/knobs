@@ -40,7 +40,7 @@ const sourceFrame = page => page.frames().find(f => f.url().includes('/source/')
 const view = (page, name) => page.locator(`.views [data-view="${name}"]`);
 
 test('side=source frames the project\'s page and builds the capture pane from the capture\'s data, without __stage', async () => {
-  const { page, errors } = await shell('s=capture:wings-vdb&view=capture&side=source');
+  const { page, errors } = await shell('s=capture:wings-vdb&view=capture&side=source&fixtures=1');
   try {
     await page.locator('body[data-source-ready="dispersal"]').waitFor();
     assert.equal(await page.locator('iframe.stage').getAttribute('src'), '/captures/wings-vdb/source/');

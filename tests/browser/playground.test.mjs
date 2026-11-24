@@ -140,7 +140,7 @@ test('the commands view lists an extension\'s pages and commands', async () => {
 });
 
 test('an edited schema remounts the stage with it', async () => {
-  const { page, errors } = await shell('s=stress');
+  const { page, errors } = await shell('s=stress&editor=1');
   try {
     const schema = [{ name: 'edited', controls: [{ key: 'size', type: 'number', value: 2, min: 0, max: 4, step: 1 }] }];
     await page.locator('.source > textarea').fill(JSON.stringify(schema));
@@ -152,11 +152,11 @@ test('an edited schema remounts the stage with it', async () => {
 });
 
 test('a schema the store refuses shows its error in the shell', async () => {
-  const { page } = await shell('s=stress');
+  const { page } = await shell('s=stress&editor=1');
   try {
     await page.locator('.source > textarea').fill('[{"name": "bad group"}]');
     await page.locator('.source button', { hasText: 'apply' }).click();
-    await assert.doesNotReject(page.locator('.source .error', { hasText: 'bad group name' }).waitFor());
+    await assert.doesNotReject(page.locator('pre.error', { hasText: 'bad group name' }).waitFor());
   } finally { await page.context().close(); }
 });
 
@@ -172,11 +172,42 @@ test('a width preset resizes the stage frame', async () => {
 test('reroll moves a random scenario to another seed', async () => {
   const { page } = await shell('s=random:3');
   try {
-    await page.locator('.source button', { hasText: 'reroll' }).click();
+    await page.locator('.bar button', { hasText: 'reroll' }).click();
     await page.waitForURL(url => new URLSearchParams(url.search).get('s') !== 'random:3');
     await page.frameLocator('iframe.stage').locator('body[data-ready]').waitFor();
     assert.match(new URLSearchParams(new URL(page.url()).search).get('s'), /^random:\d+$/);
   } finally { await page.context().close(); }
+});
+
+test('the shell hides the schema editor unless editor=1, and keeps reroll and its errors', async () => {
+  const { page } = await shell('s=random:3');
+  try {
+    assert.equal(await page.locator('.source').isVisible(), false);
+    assert.equal(await page.locator('.source > textarea').isVisible(), false);
+    // Without the editor, the stage starts at the left edge.
+    const left = await page.locator('.stage-wrap').evaluate(s => s.getBoundingClientRect().left);
+    assert.equal(left, 0);
+    const values = await page.locator('select.scenario option').evaluateAll(options => options.map(o => o.value));
+    assert.ok(!values.includes('json'), values.join(' '));
+    assert.equal(await page.locator('.bar button', { hasText: 'reroll' }).isVisible(), true);
+  } finally { await page.context().close(); }
+
+  const refused = await newPage(browser, { viewport: { width: 1600, height: 1000 } });
+  try {
+    await refused.goto(`${site.url}?s=stress&side=banana`);
+    await refused.locator('pre.error', { hasText: 'unknown side: banana' }).waitFor({ timeout: 2000 });
+  } finally { await refused.context().close(); }
+
+  const { page: editing } = await shell('s=stress&editor=1');
+  try {
+    assert.equal(await editing.locator('.source > textarea').isVisible(), true);
+    const values = await editing.locator('select.scenario option').evaluateAll(options => options.map(o => o.value));
+    assert.ok(values.includes('json'), values.join(' '));
+    // A scenario picked with the editor open keeps it open.
+    await editing.locator('select.scenario').selectOption('exemplar:curve-trace');
+    await editing.waitForURL(url => new URLSearchParams(url.search).get('s') === 'exemplar:curve-trace');
+    assert.equal(new URLSearchParams(new URL(editing.url()).search).get('editor'), '1');
+  } finally { await editing.context().close(); }
 });
 
 // The grid: several stages side by side, each captioned with its scenario.
@@ -261,7 +292,7 @@ test('the shell lists drafts in its scenario picker', async () => {
 });
 
 test('a draft pasted into the shell is written to the drafts folder and mounted', async () => {
-  const { page, errors } = await shell('s=stress');
+  const { page, errors } = await shell('s=stress&editor=1');
   try {
     await page.locator('.paste summary').click();
     await page.locator('.paste input[name=name]').fill('pasted-one');
@@ -390,7 +421,7 @@ test('the shell lists captures in its picker and shows the capture view only for
 });
 
 test('the capture view shows the source, value sets, what did not translate, and the original shots', async () => {
-  const { page, errors } = await shell('s=capture:wings-vdb&view=capture');
+  const { page, errors } = await shell('s=capture:wings-vdb&view=capture&fixtures=1');
   try {
     const capture = view(page, 'capture');
     await capture.locator('select.value-set').waitFor();
@@ -411,8 +442,35 @@ test('the capture view shows the source, value sets, what did not translate, and
   } finally { await page.context().close(); }
 });
 
+test('the capture view and the grid hide what did not translate and the shots unless fixtures=1', async () => {
+  const { page } = await shell('s=capture:wings-vdb&view=capture');
+  try {
+    const capture = view(page, 'capture');
+    await capture.locator('select.value-set').waitFor();
+    const text = await capture.innerText();
+    for (const words of ['not translated', 'viz.js', 'original drawer']) assert.ok(!text.includes(words), `capture view hides ${words}:\n${text}`);
+    assert.equal(await capture.locator('figure.shot').count(), 0);
+  } finally { await page.context().close(); }
+
+  const { page: missing } = await shell('s=capture:mini-pylon&view=capture');
+  try {
+    const capture = view(missing, 'capture');
+    await capture.locator('select.value-set').waitFor();
+    assert.ok(!(await capture.innerText()).includes('was not answering'));
+  } finally { await missing.context().close(); }
+
+  const grid = await newPage(browser, { viewport: { width: 1600, height: 1000 } });
+  try {
+    await grid.goto(`${site.url}grid.html?set=captures&w=200&h=120`);
+    await grid.locator('.capture-row').first().waitFor();
+    for (const row of await grid.locator('.capture-row').all()) {
+      assert.deepEqual(await row.locator('figure').evaluateAll(f => f.map(x => x.className)), ['cell source', 'cell knobs']);
+    }
+  } finally { await grid.context().close(); }
+});
+
 test('the capture view says why a capture has no shots', async () => {
-  const { page } = await shell('s=capture:mini-pylon&view=capture');
+  const { page } = await shell('s=capture:mini-pylon&view=capture&fixtures=1');
   try {
     await assert.doesNotReject(view(page, 'capture').getByText('was not answering').waitFor());
   } finally { await page.context().close(); }
@@ -421,7 +479,7 @@ test('the capture view says why a capture has no shots', async () => {
 test('the grid shows a row per tab of each capture: its shot, its source side and its knobs side', async () => {
   const page = await newPage(browser, { viewport: { width: 1600, height: 1000 } });
   const errors = collectPageErrors(page);
-  await page.goto(`${site.url}grid.html?set=captures`);
+  await page.goto(`${site.url}grid.html?set=captures&fixtures=1`);
   await page.locator('body[data-ready]').waitFor({ timeout: 30000 });
   try {
     const rows = await page.locator('.capture-row').evaluateAll(r => r.map(x => `${x.dataset.capture} ${x.dataset.tab}`));

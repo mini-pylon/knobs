@@ -12,12 +12,19 @@ const $ = selector => document.querySelector(selector);
 const params = new URLSearchParams(location.search);
 const scenario = params.get('s') ?? 'stress';
 const frame = $('iframe.stage');
-const errorBox = $('.source .error');
+const errorBox = $('pre.error');
+// The schema editor (the source pane and the edited-schema scenario) is
+// hidden for now; editor=1 shows it, and stays in the query as others do.
+const editor = params.get('editor') === '1';
+$('.source').hidden = !editor;
+// What did not translate, and the shots of the original drawer, are test
+// fixtures: the capture view shows them only with fixtures=1.
+const fixtures = params.get('fixtures') === '1';
 const textarea = $('.source textarea');
 
 // --- scenario picker -------------------------------------------------------
 const choices = [['stress', 'stress'], ['random', 'random (seeded)'], ...exemplarNames.map(n => [`exemplar:${n}`, `exemplar: ${n}`]),
-  ...draftNames.map(n => [`draft:${n}`, `draft: ${n}`]), ...captureNames.map(n => [`capture:${n}`, `capture: ${n}`]), ['json', 'edited schema']];
+  ...draftNames.map(n => [`draft:${n}`, `draft: ${n}`]), ...captureNames.map(n => [`capture:${n}`, `capture: ${n}`]), ...(editor ? [['json', 'edited schema']] : [])];
 const picker = $('.scenario');
 for (const [value, label] of choices) picker.append(new Option(label, value));
 const kind = scenario.startsWith('random:') ? 'random' : scenario;
@@ -325,6 +332,7 @@ function renderCapture(s) {
     out.push(table);
   }
 
+  if (!fixtures) return out;
   out.push(el('h3', '', 'not translated'));
   const list = el('ul', 'untranslated');
   for (const item of c.untranslated) list.append(el('li', '', item));

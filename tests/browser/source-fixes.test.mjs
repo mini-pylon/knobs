@@ -133,7 +133,7 @@ test('side=source on a scenario that is not a capture is refused', async () => {
 test('a capture row keeps the shot cell the same width as the source and knobs cells', async () => {
   await withSite({ captures }, async site => {
     await withPage(async page => {
-      await page.goto(`${site.url}grid.html?set=captures&w=320`);
+      await page.goto(`${site.url}grid.html?set=captures&w=320&fixtures=1`);
       const row = page.locator('.capture-row[data-capture="wings-vdb"][data-tab="dispersal"]');
       await row.waitFor({ timeout: 20000 });
       await row.locator('.shot img').waitFor();

@@ -1,0 +1,46 @@
+[
+  {
+    "about": "the defaults as the page sends them",
+    "payload": "{\"kind\":\"preview\",\"values\":{\"ground.surface\":\"asphalt\",\"ground.wear\":0.8,\"ground.wetness\":0,\"ground.puddle\":1,\"ground.puddle_size\":1,\"ground.puddle_toward\":0.52,\"ground.puddle_across\":0.12,\"ground.line\":1,\"ground.line_color\":\"yellow\",\"ground.line_toward\":-0.52,\"ground.crack\":1,\"ground.patch\":1,\"ground.joints\":1,\"ground.tone\":0.75,\"clutter.gravel\":520,\"clutter.leaves\":6,\"clutter.curb\":1,\"clutter.curb_distance\":0.95,\"light.world\":\"sky\",\"light.sun_elevation\":16,\"light.sun_azimuth\":-18.4,\"light.sun_strength\":5.5,\"light.sun_warmth\":0.5,\"light.sun_softness\":1.2,\"light.sky_fill\":0.1,\"light.sky_reflect\":0.32,\"light.haze\":2,\"light.lamp\":0,\"light.lamp_warmth\":0.8,\"camera.orbit\":35,\"camera.height\":30,\"camera.lens\":85,\"camera.fstop\":1.8,\"camera.fill\":0.8,\"pylon.base\":\"yellow\",\"pylon.body\":\"#1F4BFF\",\"pylon.weathering\":1,\"pylon.stripe_width\":1,\"render.preview_size\":480,\"render.preview_samples\":24}}",
+    "values": "{\"camera.fill\": 0.8, \"camera.fstop\": 1.8, \"camera.height\": 30, \"camera.lens\": 85, \"camera.orbit\": 35, \"clutter.curb\": 1, \"clutter.curb_distance\": 0.95, \"clutter.gravel\": 520, \"clutter.leaves\": 6, \"ground.crack\": 1, \"ground.joints\": 1, \"ground.line\": 1, \"ground.line_color\": \"yellow\", \"ground.line_toward\": -0.52, \"ground.patch\": 1, \"ground.puddle\": 1, \"ground.puddle_across\": 0.12, \"ground.puddle_size\": 1, \"ground.puddle_toward\": 0.52, \"ground.surface\": \"asphalt\", \"ground.tone\": 0.75, \"ground.wear\": 0.8, \"ground.wetness\": 0, \"light.haze\": 2, \"light.lamp\": 0, \"light.lamp_warmth\": 0.8, \"light.sky_fill\": 0.1, \"light.sky_reflect\": 0.32, \"light.sun_azimuth\": -18.4, \"light.sun_elevation\": 16, \"light.sun_softness\": 1.2, \"light.sun_strength\": 5.5, \"light.sun_warmth\": 0.5, \"light.world\": \"sky\", \"pylon.base\": \"yellow\", \"pylon.body\": \"#1F4BFF\", \"pylon.stripe_width\": 1, \"pylon.weathering\": 1}",
+    "rgb": [
+      77,
+      108,
+      87
+    ],
+    "size": 256
+  },
+  {
+    "about": "ground.wear past its float maximum",
+    "payload": "{\"kind\":\"preview\",\"values\":{\"ground.surface\":\"asphalt\",\"ground.wear\":2.75,\"ground.wetness\":0,\"ground.puddle\":1,\"ground.puddle_size\":1,\"ground.puddle_toward\":0.52,\"ground.puddle_across\":0.12,\"ground.line\":1,\"ground.line_color\":\"yellow\",\"ground.line_toward\":-0.52,\"ground.crack\":1,\"ground.patch\":1,\"ground.joints\":1,\"ground.tone\":0.75,\"clutter.gravel\":520,\"clutter.leaves\":6,\"clutter.curb\":1,\"clutter.curb_distance\":0.95,\"light.world\":\"sky\",\"light.sun_elevation\":16,\"light.sun_azimuth\":-18.4,\"light.sun_strength\":5.5,\"light.sun_warmth\":0.5,\"light.sun_softness\":1.2,\"light.sky_fill\":0.1,\"light.sky_reflect\":0.32,\"light.haze\":2,\"light.lamp\":0,\"light.lamp_warmth\":0.8,\"camera.orbit\":35,\"camera.height\":30,\"camera.lens\":85,\"camera.fstop\":1.8,\"camera.fill\":0.8,\"pylon.base\":\"yellow\",\"pylon.body\":\"#1F4BFF\",\"pylon.weathering\":1,\"pylon.stripe_width\":1,\"render.preview_size\":480,\"render.preview_samples\":24}}",
+    "values": "{\"camera.fill\": 0.8, \"camera.fstop\": 1.8, \"camera.height\": 30, \"camera.lens\": 85, \"camera.orbit\": 35, \"clutter.curb\": 1, \"clutter.curb_distance\": 0.95, \"clutter.gravel\": 520, \"clutter.leaves\": 6, \"ground.crack\": 1, \"ground.joints\": 1, \"ground.line\": 1, \"ground.line_color\": \"yellow\", \"ground.line_toward\": -0.52, \"ground.patch\": 1, \"ground.puddle\": 1, \"ground.puddle_across\": 0.12, \"ground.puddle_size\": 1, \"ground.puddle_toward\": 0.52, \"ground.surface\": \"asphalt\", \"ground.tone\": 0.75, \"ground.wear\": 1.5, \"ground.wetness\": 0, \"light.haze\": 2, \"light.lamp\": 0, \"light.lamp_warmth\": 0.8, \"light.sky_fill\": 0.1, \"light.sky_reflect\": 0.32, \"light.sun_azimuth\": -18.4, \"light.sun_elevation\": 16, \"light.sun_softness\": 1.2, \"light.sun_strength\": 5.5, \"light.sun_warmth\": 0.5, \"light.world\": \"sky\", \"pylon.base\": \"yellow\", \"pylon.body\": \"#1F4BFF\", \"pylon.stripe_width\": 1, \"pylon.weathering\": 1}",
+    "rgb": [
+      187,
+      160,
+      156
+    ],
+    "size": 256
+  },
+  {
+    "about": "ground.wetness past its int maximum by a non-integer",
+    "payload": "{\"kind\":\"preview\",\"values\":{\"ground.surface\":\"asphalt\",\"ground.wear\":0.8,\"ground.wetness\":6.5,\"ground.puddle\":1,\"ground.puddle_size\":1,\"ground.puddle_toward\":0.52,\"ground.puddle_across\":0.12,\"ground.line\":1,\"ground.line_color\":\"yellow\",\"ground.line_toward\":-0.52,\"ground.crack\":1,\"ground.patch\":1,\"ground.joints\":1,\"ground.tone\":0.75,\"clutter.gravel\":520,\"clutter.leaves\":6,\"clutter.curb\":1,\"clutter.curb_distance\":0.95,\"light.world\":\"sky\",\"light.sun_elevation\":16,\"light.sun_azimuth\":-18.4,\"light.sun_strength\":5.5,\"light.sun_warmth\":0.5,\"light.sun_softness\":1.2,\"light.sky_fill\":0.1,\"light.sky_reflect\":0.32,\"light.haze\":2,\"light.lamp\":0,\"light.lamp_warmth\":0.8,\"camera.orbit\":35,\"camera.height\":30,\"camera.lens\":85,\"camera.fstop\":1.8,\"camera.fill\":0.8,\"pylon.base\":\"yellow\",\"pylon.body\":\"#1F4BFF\",\"pylon.weathering\":1,\"pylon.stripe_width\":1,\"render.preview_size\":480,\"render.preview_samples\":24}}",
+    "values": "{\"camera.fill\": 0.8, \"camera.fstop\": 1.8, \"camera.height\": 30, \"camera.lens\": 85, \"camera.orbit\": 35, \"clutter.curb\": 1, \"clutter.curb_distance\": 0.95, \"clutter.gravel\": 520, \"clutter.leaves\": 6, \"ground.crack\": 1, \"ground.joints\": 1, \"ground.line\": 1, \"ground.line_color\": \"yellow\", \"ground.line_toward\": -0.52, \"ground.patch\": 1, \"ground.puddle\": 1, \"ground.puddle_across\": 0.12, \"ground.puddle_size\": 1, \"ground.puddle_toward\": 0.52, \"ground.surface\": \"asphalt\", \"ground.tone\": 0.75, \"ground.wear\": 0.8, \"ground.wetness\": 1, \"light.haze\": 2, \"light.lamp\": 0, \"light.lamp_warmth\": 0.8, \"light.sky_fill\": 0.1, \"light.sky_reflect\": 0.32, \"light.sun_azimuth\": -18.4, \"light.sun_elevation\": 16, \"light.sun_softness\": 1.2, \"light.sun_strength\": 5.5, \"light.sun_warmth\": 0.5, \"light.world\": \"sky\", \"pylon.base\": \"yellow\", \"pylon.body\": \"#1F4BFF\", \"pylon.stripe_width\": 1, \"pylon.weathering\": 1}",
+    "rgb": [
+      134,
+      141,
+      125
+    ],
+    "size": 256
+  },
+  {
+    "about": "pylon.body in lowercase and ground.puddle sent as true",
+    "payload": "{\"kind\":\"preview\",\"values\":{\"ground.surface\":\"asphalt\",\"ground.wear\":0.8,\"ground.wetness\":0,\"ground.puddle\":true,\"ground.puddle_size\":1,\"ground.puddle_toward\":0.52,\"ground.puddle_across\":0.12,\"ground.line\":1,\"ground.line_color\":\"yellow\",\"ground.line_toward\":-0.52,\"ground.crack\":1,\"ground.patch\":1,\"ground.joints\":1,\"ground.tone\":0.75,\"clutter.gravel\":520,\"clutter.leaves\":6,\"clutter.curb\":1,\"clutter.curb_distance\":0.95,\"light.world\":\"sky\",\"light.sun_elevation\":16,\"light.sun_azimuth\":-18.4,\"light.sun_strength\":5.5,\"light.sun_warmth\":0.5,\"light.sun_softness\":1.2,\"light.sky_fill\":0.1,\"light.sky_reflect\":0.32,\"light.haze\":2,\"light.lamp\":0,\"light.lamp_warmth\":0.8,\"camera.orbit\":35,\"camera.height\":30,\"camera.lens\":85,\"camera.fstop\":1.8,\"camera.fill\":0.8,\"pylon.base\":\"yellow\",\"pylon.body\":\"#1f4bff\",\"pylon.weathering\":1,\"pylon.stripe_width\":1,\"render.preview_size\":480,\"render.preview_samples\":24}}",
+    "values": "{\"camera.fill\": 0.8, \"camera.fstop\": 1.8, \"camera.height\": 30, \"camera.lens\": 85, \"camera.orbit\": 35, \"clutter.curb\": 1, \"clutter.curb_distance\": 0.95, \"clutter.gravel\": 520, \"clutter.leaves\": 6, \"ground.crack\": 1, \"ground.joints\": 1, \"ground.line\": 1, \"ground.line_color\": \"yellow\", \"ground.line_toward\": -0.52, \"ground.patch\": 1, \"ground.puddle\": 1, \"ground.puddle_across\": 0.12, \"ground.puddle_size\": 1, \"ground.puddle_toward\": 0.52, \"ground.surface\": \"asphalt\", \"ground.tone\": 0.75, \"ground.wear\": 0.8, \"ground.wetness\": 0, \"light.haze\": 2, \"light.lamp\": 0, \"light.lamp_warmth\": 0.8, \"light.sky_fill\": 0.1, \"light.sky_reflect\": 0.32, \"light.sun_azimuth\": -18.4, \"light.sun_elevation\": 16, \"light.sun_softness\": 1.2, \"light.sun_strength\": 5.5, \"light.sun_warmth\": 0.5, \"light.world\": \"sky\", \"pylon.base\": \"yellow\", \"pylon.body\": \"#1F4BFF\", \"pylon.stripe_width\": 1, \"pylon.weathering\": 1}",
+    "rgb": [
+      77,
+      108,
+      87
+    ],
+    "size": 256
+  }
+]

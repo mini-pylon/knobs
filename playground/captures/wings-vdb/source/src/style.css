@@ -1,0 +1,329 @@
+@font-face {
+  font-family: 'ABC Areal';
+  src: url('/fonts/ABCArealVariable.woff2') format('woff2');
+  font-weight: 400 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'ABC Areal Mono';
+  src: url('/fonts/ABCArealMonoVariable.woff2') format('woff2');
+  font-weight: 400 700;
+  font-display: swap;
+}
+:root {
+  --sans: 'ABC Areal', system-ui, sans-serif;
+  --label: 400 12px/1.4 var(--sans);
+  --label-ink: #33485c;
+  --gutter: clamp(20px, 3vw, 44px); /* the corner labels' distance from the side and bottom edges */
+  --edge: max(var(--gutter), env(safe-area-inset-bottom));
+  --drawer: min(30vh, 210px);
+  --term-bg: #13191f;
+  --term-fg: #d8e1e8;
+  --term-dim: #7d8b96;
+  --term-act: #e8c547;
+  --term-act-hi: #fff1a6;
+  --term-line: rgba(255, 255, 255, .08);
+  --term-err: #ff9a9a;
+  --mono: 'ABC Areal Mono', ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html { background: #a6a19e; }
+body { margin: 0; }
+/* The open drawer slides over the scene, and the canvas moves up by half the
+   drawer so the shape stays centred in the space left. It moves, never
+   resizes: resizing a canvas clears it, and it would show blank until the
+   next frame finished. */
+.sky { position: fixed; inset: 0; background: linear-gradient(#78879c, #bdada0 70%, #f7cca3); }
+#cloud { display: block; width: 100%; height: 100%; transition: transform .22s ease; }
+.term-open #cloud { transform: translateY(calc(var(--drawer) / -2)); }
+.fallback { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.renderer-ready .fallback { display: none; }
+.unavailable #cloud { display: none; }
+.unavailable .fallback { display: block; }
+main { position: relative; pointer-events: none; }
+main { height: 100svh; }
+footer {
+  position: fixed; inset: auto 0 0; display: grid; grid-template-columns: 1fr auto 1fr; align-items: last baseline;
+  padding: 0 var(--gutter) var(--edge);
+  color: var(--label-ink); font: var(--label); line-height: 1; letter-spacing: .015em; pointer-events: none;
+  transition: transform .25s ease, opacity .25s ease;
+}
+#model-name { justify-self: start; white-space: nowrap; }
+@media (max-width: 600px) {
+  footer { grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 12px; }
+}
+/* The object's description (detail.js), centred on the corner labels'
+   baseline, on the homepage and in its detail view alike. Where it does not fit
+   (phones) it wraps upward: the footer aligns on last baselines. The commands
+   (models' text) are not shown for now. The negative margin takes back the
+   taller line's extra room below the baseline (plus Chrome's rounding), so the
+   row, and the corner labels, sit where they do without a description. */
+#model-text { justify-self: center; text-align: center; line-height: 1.4; margin-bottom: calc(-.2em - .4px); text-wrap: balance; pointer-events: auto; }
+#chat-toggle, #waitlist-link {
+  justify-self: end;
+  opacity: .7; pointer-events: auto; cursor: pointer;
+  font: inherit; letter-spacing: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0;
+  transition: opacity .2s ease;
+}
+#chat-toggle:hover, #chat-toggle:focus-visible, #chat-toggle[aria-expanded="true"] { opacity: 1; }
+#chat-toggle:focus-visible { outline: 1px solid currentColor; outline-offset: 4px; }
+/* The waitlist flag's link (flags.js) takes the toggle's place and look. */
+#waitlist-link { text-decoration: none; white-space: nowrap; }
+#waitlist-link:hover, #waitlist-link:focus-visible { opacity: 1; }
+#waitlist-link:focus-visible { outline: 1px solid currentColor; outline-offset: 4px; }
+
+/* Scrolling is locked while the chat is open so the shape underneath stays put. */
+:root:has(body.panel-open) { overflow: hidden; }
+/* Object detail view (main.js setDive): a click on the object disperses it to
+   bare sky; scrolling is locked until Escape. */
+:root:has(body.dive-open) { overflow: hidden; }
+body.object-hover { cursor: pointer; }
+/* The footer stays; the ⌘K toggle gives way to the way back, in the same spot. */
+#chat-toggle, #waitlist-link, #dive-return { grid-column: 3; grid-row: 1; }
+#dive-return {
+  justify-self: end; white-space: nowrap;
+  opacity: 0; visibility: hidden; pointer-events: auto; cursor: pointer;
+  font: inherit; letter-spacing: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0;
+  transition: opacity .2s ease, visibility .25s;
+}
+.dive-open #chat-toggle, .dive-open #waitlist-link { opacity: 0; visibility: hidden; }
+.dive-open #dive-return { opacity: .7; visibility: visible; }
+#dive-return:hover, #dive-return:focus-visible { opacity: 1; }
+#dive-return:focus-visible { outline: 1px solid currentColor; outline-offset: 4px; }
+/* Room for each program's own detail content (detail.js), centred in the space
+   above the footer (--inset, set by main.js); shows once the cloud has mostly
+   gone and leaves quickly on the way back. */
+#detail {
+  position: fixed; inset: 0 0 var(--inset, 50px); display: grid; place-items: center; padding: 0 var(--gutter);
+  pointer-events: none; opacity: 0; transition: opacity .25s ease;
+}
+#detail[hidden] { display: none; }
+#detail.shown { opacity: 1; transition: opacity .7s ease; }
+
+/* Chat panel: an input laid over the chat pill; it and everything the agent
+   shows are in the footer labels' type (ABC Areal, 12px), commands to copy in
+   the note's mono. Phones get 16px so iOS does not zoom in on focus.
+   JS sets the size and position from the pill: top is the input row's top,
+   and after the first message the box holds the reply. --row is the input
+   row's height. */
+.chat {
+  --row: 80px; --chat-font: 400 12px/1 var(--sans); --chat-indent: 40px;
+  position: fixed; left: 50%; top: calc(50% - 40px); z-index: 5; width: 600px; height: 80px; transform: translateX(-50%);
+  color: var(--label-ink); font: var(--chat-font); letter-spacing: .015em;
+  opacity: 0; visibility: hidden; transition: opacity .18s ease, visibility 0s linear .18s;
+}
+@media (max-width: 600px) { .chat { --chat-font: 400 16px/1 var(--sans); --chat-indent: 44px; } .chat-about { display: none; } }
+.chat.ready { opacity: 1; visibility: visible; transition: opacity .5s ease; }
+.chat form { position: relative; margin: 0; height: var(--row); }
+/* After the first message the input row hides; "something else", while open,
+   brings it back as the pill under the reply (--pills-top). */
+.chat.replying > form { display: none; }
+.chat.composing > form { display: block; position: absolute; left: 0; right: 0; top: var(--pills-top); }
+.chat-prompt { position: absolute; left: 22px; top: 50%; translate: 0 -50%; pointer-events: none; }
+.chat input {
+  display: block; box-sizing: border-box; width: 100%; height: 100%; padding: 0 22px 0 var(--chat-indent); margin: 0;
+  font: inherit; letter-spacing: inherit; color: inherit; caret-color: currentColor;
+  background: none; border: 0; border-radius: 0; outline: none; -webkit-appearance: none; appearance: none;
+}
+.chat input::placeholder { color: inherit; opacity: .7; }
+.chat input::selection { background: rgba(51, 72, 92, .2); }
+.chat-name { flex: none; min-width: 10ch; }
+.chat-about { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Reply thread (chat.js): the latest exchange under the input, in the same
+   ink and type, scrolling inside the pill when long. Controls are quiet:
+   hairline outlines on a faint wash of white, full ink on hover and focus. */
+.chat-thread { overflow-y: auto; overscroll-behavior: contain; margin-top: -16px; padding: 0 22px 0 var(--chat-indent); line-height: 1.6; scrollbar-width: none; }
+.chat-thread::-webkit-scrollbar { display: none; }
+.chat.replying .chat-thread { margin-top: 0; padding-top: 24px; }
+.chat-thread:focus { outline: none; }
+.chat-thread p { margin: 0 0 10px; }
+.chat-thread > :last-child { margin-bottom: 0; }
+.chat-you { position: relative; opacity: .55; }
+.chat-you::before { content: '›'; position: absolute; left: calc(22px - var(--chat-indent)); }
+.chat-thinking span { display: inline-block; margin-right: .3ch; animation: chat-dot 1.1s ease-in-out infinite; }
+.chat-thinking span:nth-child(2) { animation-delay: .15s; }
+.chat-thinking span:nth-child(3) { animation-delay: .3s; }
+@keyframes chat-dot { 0%, 100% { opacity: .25; } 40% { opacity: 1; } }
+.chat-enter { animation: chat-in .35s ease both; }
+@keyframes chat-in { from { opacity: 0; translate: 0 4px; } }
+.chat-steps { list-style: none; margin: 0 0 10px; padding: 0; }
+.chat-steps li { position: relative; opacity: .7; }
+.chat-steps li::before { position: absolute; left: calc(22px - var(--chat-indent)); }
+.chat-steps li.running::before { content: '·'; animation: chat-dot 1.1s ease-in-out infinite; }
+.chat-steps li.done::before { content: '✓'; }
+.chat-steps li.running::after { content: '…'; }
+.chat-thread button, .chat-field input {
+  font: inherit; letter-spacing: inherit; color: inherit; margin: 0; -webkit-appearance: none; appearance: none;
+  background: rgba(255, 255, 255, .22); border: 1px solid rgba(51, 72, 92, .2); border-radius: 999px; outline: none; cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.chat-thread button:hover, .chat-thread button:focus-visible { background: rgba(255, 255, 255, .5); border-color: rgba(51, 72, 92, .55); }
+.chat-chips, .chat-toggles { display: flex; flex-wrap: wrap; gap: 6px 8px; margin: 0 0 10px; }
+.chat-chip, .chat-toggle { padding: 5px 11px; line-height: 1.2; }
+.chat-thread .chat-primary { background: rgba(51, 72, 92, .85) !important; border-color: transparent !important; color: #fbeee0 !important; }
+.chat-toggle::before { content: '○ '; }
+.chat-toggle[aria-pressed="true"]::before { content: '● '; }
+.chat-choices { display: flex; flex-direction: column; margin: 0 0 10px calc(22px - var(--chat-indent)); }
+.chat-thread .chat-choice { position: relative; display: flex; gap: 1ch; padding: 4px 0 4px calc(var(--chat-indent) - 22px); text-align: left; background: none; border: 0; border-radius: 0; opacity: .75; }
+.chat-thread .chat-choice:hover, .chat-thread .chat-choice:focus-visible { background: none; opacity: 1; }
+.chat-choice:hover::before, .chat-choice:focus-visible::before { content: '›'; position: absolute; left: 0; }
+/* Option pills: each a label over its own small cloud pill (main.js), laid
+   out by chat.js under the reply. The label is the cloud's ink, its opacity
+   tied to the cloud's (--appear, set by main.js); pointing at one or focusing
+   it puffs its cloud up and brings it to full ink. */
+.chat-pills { position: absolute; left: 50%; top: var(--pills-top, 0px); width: 0; height: 0; }
+.chat-pill {
+  position: absolute; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 1ch; padding: 0; margin: 0;
+  white-space: nowrap; font: inherit; letter-spacing: inherit; color: inherit; background: none; border: 0; outline: none; cursor: pointer;
+  -webkit-appearance: none; appearance: none; opacity: calc(var(--appear, 0) * .85);
+}
+.chat-pill:hover, .chat-pill:focus-visible { opacity: var(--appear, 0); }
+.chat-pill:focus-visible .chat-name { text-decoration: underline 1px; text-underline-offset: 3px; }
+.chat-pill .chat-name { min-width: 0; }
+.chat-pill .chat-about { opacity: .7; }
+.chat-pill.chat-primary { font-weight: 600; }
+.chat-pill.waiting, .chat-pill.open { visibility: hidden; }
+.chat-pill.gone { pointer-events: none; }
+.chat-card { margin: 0 0 10px; padding: 2px 0 2px 12px; border-left: 1px solid rgba(51, 72, 92, .35); }
+.chat-thread .chat-card p { margin: 0; }
+.chat-card-title { font-weight: 600; }
+.chat-card-line { opacity: .75; }
+.chat-command { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
+.chat-command code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; padding: 6px 10px; font: inherit; font-family: var(--mono); background: rgba(255, 255, 255, .3); border-radius: 6px; }
+.chat-copy { padding: 5px 11px; }
+@media (max-width: 600px) { .chat-command code { white-space: normal; overflow-wrap: anywhere; } }
+.chat-slider { display: flex; align-items: center; gap: 1.5ch; margin: 0 0 6px; }
+.chat-slider input { flex: 0 1 200px; min-width: 80px; height: 18px; margin: 0; background: none; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.chat-slider input::-webkit-slider-runnable-track { height: 1px; background: rgba(51, 72, 92, .45); }
+.chat-slider input::-webkit-slider-thumb { -webkit-appearance: none; width: 11px; height: 11px; margin-top: -5px; border-radius: 50%; background: var(--label-ink); }
+.chat-slider input::-moz-range-track { height: 1px; background: rgba(51, 72, 92, .45); }
+.chat-slider input::-moz-range-thumb { width: 11px; height: 11px; border: 0; border-radius: 50%; background: var(--label-ink); }
+.chat-slider input:focus-visible { outline: none; }
+.chat-slider input:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px rgba(255, 255, 255, .6); }
+.chat-value { min-width: 5ch; text-align: right; }
+.chat form.chat-field { display: flex; align-items: center; gap: 8px; height: auto; margin: 0 0 10px; }
+.chat-field .chat-name { min-width: 0; opacity: .75; }
+.chat-field input { flex: 1; width: auto; height: auto; min-width: 0; padding: 5px 11px; line-height: 1.2; cursor: text; border-radius: 6px; }
+.chat-field input:focus { background: rgba(255, 255, 255, .45); border-color: rgba(51, 72, 92, .55); }
+.term-open footer { opacity: 0; }
+/* In agent chat the footer's text fades out, the ⌘K toggle too (Escape or ⌘K closes chat). */
+#model-name, #model-text { transition: opacity .25s ease, visibility .25s; }
+#chat-toggle, #waitlist-link { transition: opacity .2s ease, visibility .25s; }
+.panel-open #model-name, .panel-open #model-text, .panel-open #chat-toggle { opacity: 0; visibility: hidden; }
+/* In their place, every slash command (main.js COMMANDS), in the labels' type;
+   while a "/" is typed, the matches show in full ink and the rest dim. Phones
+   wrap them onto two lines. */
+#chat-hints {
+  position: absolute; left: var(--gutter); right: var(--gutter); bottom: var(--edge); display: flex; justify-content: center; gap: 0 2.5ch;
+  font: var(--label); line-height: 1; pointer-events: auto; opacity: 0; visibility: hidden; transition: opacity .25s ease, visibility .25s;
+}
+.panel-open #chat-hints { opacity: 1; visibility: visible; transition-delay: .15s; }
+#chat-hints button { flex: none; padding: 0; margin: 0; font: inherit; letter-spacing: inherit; color: inherit; background: none; border: 0; cursor: pointer; opacity: .6; transition: opacity .15s ease; }
+#chat-hints button:hover, #chat-hints button:focus-visible { opacity: 1; outline: none; }
+#chat-hints button:focus-visible { text-decoration: underline 1px; text-underline-offset: 3px; }
+#chat-hints.typing button { opacity: .3; }
+#chat-hints.typing button.match { opacity: 1; }
+@media (max-width: 600px) { #chat-hints { flex-wrap: wrap; gap: 10px 2ch; } }
+/* Which debug view is showing (the drawer's view command, or v). */
+#view-tag { position: fixed; top: var(--gutter); left: var(--gutter); z-index: 4; color: var(--label-ink); font: var(--label); line-height: 1; letter-spacing: .015em; pointer-events: none; }
+#view-tag[hidden] { display: none; }
+
+/* Collapsed control: a grip centred on the same line as the corner labels.
+   On hover the grip swaps out for a "controls" label styled like them. */
+.term { position: fixed; inset: auto 0 0; z-index: 10; font: 12px/1.5 var(--mono); color: var(--term-fg); }
+.term-strip {
+  position: absolute; left: 50%; bottom: calc(var(--edge) - 12px); translate: -50% 0;
+  display: grid; place-items: center; padding: 12px 24px; border: 0; background: none; cursor: pointer;
+  color: var(--label-ink); font: var(--label); letter-spacing: .015em;
+}
+.term-strip > * { grid-area: 1 / 1; transition: opacity .18s ease; }
+.term-grip { width: 34px; height: 4px; border-radius: 2px; background: currentColor; opacity: .35; }
+.term-hint { opacity: 0; white-space: nowrap; }
+.term-strip:hover .term-grip, .term-strip:focus-visible .term-grip { opacity: 0; }
+.term-strip:hover .term-hint, .term-strip:focus-visible .term-hint { opacity: 1; }
+.term-strip:focus-visible { outline: none; }
+.term.open .term-strip { opacity: 0; pointer-events: none; }
+/* The drawer's handle is hidden for now; /clouds in the chat (or `) opens it. */
+.term-strip { display: none; }
+
+.term-drawer {
+  position: absolute; inset: auto 0 0; height: var(--drawer); display: flex; flex-direction: column;
+  background: var(--term-bg); border-top: 1px solid var(--term-line);
+  translate: 0 100%; visibility: hidden; transition: translate .22s ease, visibility 0s .22s;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.term.open .term-drawer { translate: 0 0; visibility: visible; transition: translate .22s ease; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+
+/* Header: plain text tabs. Anything you can act on is yellow, the active one
+   brighter; readouts are the light grey. The drawer's padding
+   is one even 16px all round (--pad). */
+.term { --pad: 16px; }
+.term-head { position: relative; display: flex; align-items: center; gap: 16px; padding: var(--pad) var(--pad) 10px; line-height: 1; }
+.term-tabs { display: flex; gap: 16px; overflow-x: auto; }
+.term-tab, .term-close { color: var(--term-act); }
+.term-tab.active, .term-tab:hover, .term-close:hover { color: var(--term-act-hi); }
+.term-close { margin-left: auto; font-size: 16px; line-height: 12px; }
+.term-status { flex: 1; text-align: right; color: var(--term-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* The slash menu: a flat popover. */
+.term-slash { background: var(--term-bg); border: 1px solid var(--term-line); border-radius: 4px; padding: 6px 0; }
+.term-slash[hidden] { display: none; }
+.term-empty { color: var(--term-dim); padding: 4px var(--pad); }
+
+/* Body: one pane, the console or the active tab's params, scrolling when
+   they do not fit. Descriptions show on hover. */
+.term-body { flex: 1; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); padding-bottom: var(--pad); }
+.term-body > [hidden] { display: none; }
+.term-vars { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+/* A params tab: its rows on the left, its picture (viz.js) on the right. */
+.term-params { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 24px; min-height: 0; }
+.term-viz { min-width: 0; min-height: 0; padding-right: var(--pad); }
+.viz-chart { width: 100%; height: 100%; min-height: 0; display: block; }
+@media (max-width: 760px) { .term-params { grid-template-columns: 1fr; } .term-viz { display: none; } }
+.term-row { display: grid; grid-template-columns: 18ch minmax(0, 24ch) 6ch; gap: 16px; align-items: center; padding: 1px var(--pad); white-space: nowrap; }
+.term-key { color: var(--term-act); cursor: default; user-select: none; }
+.term-row.changed .term-key, .term-row:hover .term-key { color: var(--term-act-hi); }
+.term-about { display: none; }
+.term-bar { position: relative; height: 14px; cursor: ew-resize; user-select: none; touch-action: none; outline: none; }
+.term-bar::before { content: ''; position: absolute; inset: 6px 0; background: var(--term-line); }
+.term-fill { position: absolute; left: 0; top: 6px; bottom: 6px; background: var(--term-fg); }
+.term-bar:focus-visible::before { background: var(--term-dim); }
+.term-toggle { justify-self: start; color: var(--term-act-hi); }
+.term-toggle.off { color: var(--term-act); }
+.term-toggle:focus-visible { outline: 1px solid var(--term-dim); outline-offset: 2px; }
+.term-value { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Perf page: metrics on the left, a 30 s chart on the right. */
+.term-page-perf { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; padding: 0 var(--pad); min-height: 0; }
+.perf-stats { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+.perf-row { display: grid; grid-template-columns: 10ch minmax(0, 1fr); gap: 16px; white-space: nowrap; }
+.perf-key { color: var(--term-fg); }
+.perf-value { overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.perf-chart { width: 100%; height: 100%; min-height: 0; display: block; }
+@media (max-width: 760px) { .term-page-perf { grid-template-columns: 1fr; } .perf-chart { display: none; } }
+.term-console { position: relative; display: flex; flex-direction: column; min-height: 0; }
+.term-slash { position: absolute; left: 8px; right: 8px; z-index: 2; }
+.term-slash-item { display: grid; grid-template-columns: 7ch 13ch minmax(0, 1fr); gap: 10px; padding: 2px 10px; cursor: pointer; white-space: nowrap; }
+.term-slash-item.active { background: var(--term-line); }
+.term-slash-name { color: var(--term-act); }
+.term-slash-usage, .term-slash-about { color: var(--term-dim); }
+.term-slash-about { overflow: hidden; text-overflow: ellipsis; }
+.term-log { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 0 var(--pad); color: var(--term-dim); }
+.term-line { white-space: pre-wrap; word-break: break-word; }
+.term-line.cmd { color: var(--term-fg); }
+.term-line.err { color: var(--term-err); }
+.term-prompt { display: flex; gap: 8px; padding: 6px var(--pad) 0; color: var(--term-act); }
+.term-prompt input { flex: 1; min-width: 0; font: inherit; color: var(--term-fg); background: none; border: 0; outline: none; caret-color: var(--term-fg); }
+
+@media (max-width: 760px) {
+  :root { --drawer: min(44vh, 320px); }
+  .term-row { grid-template-columns: 17ch minmax(0, 1fr) 5ch; gap: 12px; padding: 3px var(--pad); }
+  .term-status { display: none; }
+  .term-head { gap: 12px; }
+  .term-tabs { flex: 0 1 auto; min-width: 0; gap: 12px; }
+  .term-prompt input { font-size: 16px; }
+}
+
+/* h hides the UI for a clean view (main.js setUiHidden). */
+.ui-hidden footer, .ui-hidden #view-tag, .ui-hidden #detail, .ui-hidden #chat, .ui-hidden .term { visibility: hidden !important; }

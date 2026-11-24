@@ -8,9 +8,14 @@ import { resolveScenario } from './scenarios.js';
 
 const params = new URLSearchParams(location.search);
 const id = params.get('s') ?? 'stress';
-// The drawer's title, its console tab and prompt: an exemplar's, a draft's or
-// a capture's own name, and 'playground' for everything else.
-const NAME = /^(exemplar|draft|capture):/.test(id) ? id.slice(id.indexOf(':') + 1) : 'playground';
+// The drawer's title, its console tab and prompt, the data-knobs host, and
+// the <name>:values, <name>:groups and <name>:drawer keys. An exemplar's and
+// a draft's stay their own name. A capture is knobs-<project>, so the knobs
+// side never touches the project's own page's keys. Everything else is
+// 'playground'.
+const NAME = /^capture:/.test(id)
+  ? `knobs-${id.slice(id.indexOf(':') + 1)}`
+  : /^(exemplar|draft):/.test(id) ? id.slice(id.indexOf(':') + 1) : 'playground';
 document.querySelector('.label').textContent = id;
 
 async function start() {

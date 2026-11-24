@@ -23,19 +23,23 @@ refuses the requests.
 ## Pages
 
 - **`/`, the shell.** Pick a scenario. The stage shows the drawer mounted in a real page, at
-  390, 768 or 1280 px or the full width. The source pane holds the schema as JSON; edit it and
-  apply to remount. The right-hand views read the live stage:
+  390, 768 or 1280 px or the full width. The source pane, hidden for now, holds the schema as
+  JSON; edit it and apply to remount. Add `editor=1` to the query to show it. The right-hand
+  views read the live stage:
   - **schema** lists every group and control, with type, range and default.
   - **state** shows what is changed from the defaults (what save would write) and every live value.
   - **events** logs each value change.
   - **commands** lists the pages, commands, pictures and status an extension adds.
-  - **capture**, for a capture only: where it came from, a value-set picker, what did not
-    translate, and shots of the project's own drawer beside the stage.
+  - **capture**, for a capture only: where it came from, a value-set picker, and the
+    `source | knobs` switch and the fixture line. What did not translate and the shots of the
+    project's own drawer are test fixtures, listed only with `fixtures=1`. `side=source` frames
+    the project's own page.
 - **`/grid.html`, the grid.** Many stages side by side: `set=exemplars`, `set=seeds&from=1&n=12`,
   `set=drafts`, `set=captures`, `set=all`, or `ids=stress,random:7`. `tab=` opens every stage on
   the same tab.
 - **`/stage.html`, the stage.** One scenario, which the other two pages frame. The drawer is
-  titled with the exemplar's, draft's or capture's name, and `playground` for the other
+  titled with the exemplar's or the draft's name, `knobs-<project>` for a capture so its
+  storage keys stay apart from the project's own page, and `playground` for the other
   scenarios. Its `window.__stage` holds `{ id, groups, store, options, events, error, capture }`.
 
 ## Scenarios
@@ -47,7 +51,7 @@ refuses the requests.
 | `exemplar:<name>` | An exemplar from `skills/knobs/exemplars/`, with its picture or extension |
 | `draft:<name>` | A draft from the drafts folder: what an agent wrote for a project |
 | `capture:<name>` | A project's own drawer from the captures folder. `set=` names the value set it mounts with (`defaults` if none) |
-| `json` | The schema last applied from the source pane |
+| `json` | The schema last applied from the source pane (listed only with `editor=1`) |
 
 ## Drafts
 
@@ -59,8 +63,8 @@ Each draft becomes a scenario as soon as it is on disk.
 To get a draft in:
 
 - have the agent write the folder into the drafts folder, or
-- paste the files into **paste a draft** in the shell's source pane, which saves them there and
-  mounts the draft.
+- paste the files into **paste a draft** in the shell's source pane (`editor=1`), which saves
+  them there and mounts the draft.
 
 `/grid.html?set=drafts` shows every draft. `npm run playground:shots -- --only drafts` saves each
 one's tabs.
@@ -72,8 +76,11 @@ next to the exemplars. Captures are committed, in `playground/captures/<project>
 `KNOBS_CAPTURES`):
 
 - `capture.json`: `source` (repo, branch, commit, and whether the checkout had uncommitted
-  changes), `capturedAt`, `groups` in knobs form, `valueSets`, `untranslated`, and `shots`.
+  changes), `capturedAt`, `groups` in knobs form, `valueSets`, `untranslated`, `shots`, and
+  `vendored` (each copied file's source path and sha256, and the stubbed modules).
 - `shots/`: the project's own drawer, one PNG per tab.
+- `source/`: the project's own page, copied beside the shots. [The notice](captures/NOTICE.md)
+  says whose code it is. Capture never writes that notice.
 
 ```bash
 npm run playground:capture -- wings-vdb [checkout]    # default ~/linda/repos/wings-vdb
@@ -89,10 +96,11 @@ project's dev server is already up it opens the drawer with the backtick key and
 otherwise the capture has no shots and `shotsSkipped` says why. A capture run replaces the
 project's folder.
 
-A value set is `{ about, values, dropped? }`. `values` holds only what differs from the
-defaults, checked by the store's own rules; a value the store would refuse, or a path it does
-not know, is listed under `dropped` with the reason. `set=<name>` mounts the capture with those
-values as file values (`defineControls(groups, values)`).
+A value set is `{ about, values, sourceValues, dropped? }`. `values` holds only what differs
+from the defaults, checked by the store's own rules; a value the store would refuse, or a path
+it does not know, is listed under `dropped` with the reason. `sourceValues` is the same set in
+the project's own names, which is what the source page is seeded with. `set=<name>` mounts the
+capture with those values as file values (`defineControls(groups, values)`).
 
 | Project | Schema | Value sets | Hidden | Not translated |
 |---|---|---|---|---|
@@ -102,5 +110,37 @@ values as file values (`defineControls(groups, values)`).
 Their dev servers: wings-vdb on port 5350 (Chromium gets the Vulkan flags headless WebGL needs;
 each shot takes about 20 seconds), mini-pylon's tweak server on 5371.
 
-`/grid.html?set=captures` shows every capture, and `npm run playground:shots -- --only captures`
-saves each one's tabs as knobs draws them.
+`/grid.html?set=captures` shows one row per visible tab: the source page and the knobs page,
+with the shot of the original drawer before them when the query has `fixtures=1`. `npm run playground:shots -- --only captures` saves each knobs tab, and each source
+tab as `capture-<project>-source-<tab>.png`.
+
+### The source side
+
+`side=source` on a capture frames that project's own page instead of the knobs stage. The
+capture view's `source | knobs` switch keeps `set`, `tab` and `view`, and maps the console tab
+across: the source page's console is the project's name, and the knobs drawer is
+`knobs-<project>`. The fixture line names the snapshot, the stubbed modules, what the stand-in
+refuses, and, for wings-vdb, whether the fonts are local or a fallback.
+
+The seed clears every `wings-vdb:` and `mini-pylon-tweak:` key in both storages, then writes
+the value set and the tab. Edits in the page last until the shell or the grid seeds it again
+(a reload of the shell, or another set, tab or side). Reloading the source page, or opening it
+in a second tab, does not reseed. Source cells and source shots run one tab at a time, so
+each page starts from its own seed.
+
+wings-vdb's source is a Vite instance on the playground's own port. Two modules are stubbed
+rather than copied: `src/chat.js` and `src/dev-report.js`. Its fonts come from the
+wings-vdb checkout, or from `KNOBS_WINGS_FONTS` when that is set. When the files are not
+there, no face is served and the page falls back to its own CSS font stack. Saving defaults
+(`/__wings/defaults`) is refused.
+
+mini-pylon's source is the plain files of its tweak page. The stand-in replaces
+`tweak_server.py`; it does not replace the page. Previews are served at once. Finals are refused.
+
+The server mounts whatever is in the captures folder when it starts, so restart it after a
+capture. For the unit above, `systemctl --user restart knobs-playground`.
+
+Afterwards, `npm run playground:check-fixtures` loads each source page headless. It fails when
+the page asks for another origin or a root path outside the served table, when a console error
+or an uncaught exception is reported, when a wings-vdb picture is blank or unreadable, or when
+mini-pylon's preview image never loads.

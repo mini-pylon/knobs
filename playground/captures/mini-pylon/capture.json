@@ -5,7 +5,7 @@
     "commit": "b984b47a9108738098218b200f5ba2e73614a583",
     "dirty": true
   },
-  "capturedAt": "2026-11-13T21:27:05.057Z",
+  "capturedAt": "2026-11-16T06:53:30.144Z",
   "groups": [
     {
       "name": "ground",
@@ -392,15 +392,27 @@
   "valueSets": {
     "defaults": {
       "about": "the defaults in tools/scene_params.py",
-      "values": {}
+      "values": {},
+      "sourceValues": {}
     },
     "afternoon": {
       "about": "late-afternoon sun at the road edge (the default)",
-      "values": {}
+      "values": {},
+      "sourceValues": {}
     },
     "overcast": {
       "about": "flat grey daylight, damp ground",
       "values": {
+        "light.world": "studio",
+        "light.sun_elevation": 50,
+        "light.sun_strength": 0.6,
+        "light.sun_softness": 30,
+        "light.sun_warmth": 0.1,
+        "light.sky_fill": 0.45,
+        "light.sky_reflect": 0.55,
+        "ground.wetness": 0.35
+      },
+      "sourceValues": {
         "light.world": "studio",
         "light.sun_elevation": 50,
         "light.sun_strength": 0.6,
@@ -420,6 +432,14 @@
         "light.sky_fill": 0.12,
         "light.sky_reflect": 0.5,
         "light.haze": 4
+      },
+      "sourceValues": {
+        "light.sun_elevation": 4,
+        "light.sun_strength": 2.5,
+        "light.sun_warmth": 0.9,
+        "light.sky_fill": 0.12,
+        "light.sky_reflect": 0.5,
+        "light.haze": 4
       }
     },
     "wet-night": {
@@ -427,6 +447,15 @@
       "values": {
         "light.sun_strength": 0,
         "light.sky_fill": 0.01,
+        "light.sky_reflect": 0.02,
+        "light.lamp": 1200,
+        "light.lamp_warmth": 0.85,
+        "ground.wetness": 0.9,
+        "ground.puddle_size": 1.8
+      },
+      "sourceValues": {
+        "light.sun_strength": 0,
+        "light.sky_fill": 0.005,
         "light.sky_reflect": 0.02,
         "light.lamp": 1200,
         "light.lamp_warmth": 0.85,
@@ -441,11 +470,33 @@
         "ground.line_color": "white",
         "clutter.gravel": 120,
         "clutter.leaves": 3
+      },
+      "sourceValues": {
+        "ground.surface": "concrete",
+        "ground.line_color": "white",
+        "clutter.gravel": 120,
+        "clutter.leaves": 3
       }
     },
     "studio": {
       "about": "seamless studio sweep, soft key light",
       "values": {
+        "ground.surface": "studio",
+        "light.world": "studio",
+        "ground.puddle": 0,
+        "clutter.gravel": 0,
+        "clutter.leaves": 0,
+        "clutter.curb": 0,
+        "light.sun_elevation": 50,
+        "light.sun_azimuth": -40,
+        "light.sun_strength": 3,
+        "light.sun_softness": 14,
+        "light.sun_warmth": 0.1,
+        "light.sky_fill": 0.6,
+        "light.sky_reflect": 0.6,
+        "camera.height": 20
+      },
+      "sourceValues": {
         "ground.surface": "studio",
         "light.world": "studio",
         "ground.puddle": 0,
@@ -476,6 +527,46 @@
         "pylon.base": "black",
         "pylon.weathering": 0.7,
         "pylon.stripe_width": 1.7
+      },
+      "sourceValues": {
+        "ground.surface": "asphalt",
+        "ground.wear": 0.8,
+        "ground.wetness": 0,
+        "ground.puddle": 1,
+        "ground.puddle_size": 2.65,
+        "ground.puddle_toward": 0.52,
+        "ground.puddle_across": 0.12,
+        "ground.line": 1,
+        "ground.line_color": "white",
+        "ground.line_toward": -0.8,
+        "ground.crack": 1,
+        "ground.patch": 1,
+        "ground.joints": 1,
+        "ground.tone": 0.75,
+        "clutter.gravel": 570,
+        "clutter.leaves": 24,
+        "clutter.curb": 1,
+        "clutter.curb_distance": 0.95,
+        "light.world": "sky",
+        "light.sun_elevation": 16,
+        "light.sun_azimuth": -18.5,
+        "light.sun_strength": 5.5,
+        "light.sun_warmth": 0.5,
+        "light.sun_softness": 23,
+        "light.sky_fill": 0.1,
+        "light.sky_reflect": 0.32,
+        "light.haze": 2,
+        "light.lamp": 0,
+        "light.lamp_warmth": 0.8,
+        "camera.orbit": 35,
+        "camera.height": 30,
+        "camera.lens": 85,
+        "camera.fstop": 1.8,
+        "camera.fill": 0.62,
+        "pylon.base": "black",
+        "pylon.body": "#1F4BFF",
+        "pylon.weathering": 0.7,
+        "pylon.stripe_width": 1.7
       }
     },
     "help-20261111-173007-2160": {
@@ -488,6 +579,46 @@
         "light.sun_azimuth": -18.5,
         "pylon.base": "black",
         "pylon.weathering": 0.7
+      },
+      "sourceValues": {
+        "ground.surface": "asphalt",
+        "ground.wear": 0.8,
+        "ground.wetness": 0,
+        "ground.puddle": 1,
+        "ground.puddle_size": 1,
+        "ground.puddle_toward": 0.52,
+        "ground.puddle_across": 0.12,
+        "ground.line": 1,
+        "ground.line_color": "white",
+        "ground.line_toward": -0.8,
+        "ground.crack": 1,
+        "ground.patch": 1,
+        "ground.joints": 1,
+        "ground.tone": 0.75,
+        "clutter.gravel": 570,
+        "clutter.leaves": 24,
+        "clutter.curb": 1,
+        "clutter.curb_distance": 0.95,
+        "light.world": "sky",
+        "light.sun_elevation": 16,
+        "light.sun_azimuth": -18.5,
+        "light.sun_strength": 5.5,
+        "light.sun_warmth": 0.5,
+        "light.sun_softness": 1.2,
+        "light.sky_fill": 0.1,
+        "light.sky_reflect": 0.32,
+        "light.haze": 2,
+        "light.lamp": 0,
+        "light.lamp_warmth": 0.8,
+        "camera.orbit": 35,
+        "camera.height": 30,
+        "camera.lens": 85,
+        "camera.fstop": 1.8,
+        "camera.fill": 0.8,
+        "pylon.base": "black",
+        "pylon.body": "#1F4BFF",
+        "pylon.weathering": 0.7,
+        "pylon.stripe_width": 1
       }
     }
   },
@@ -498,5 +629,34 @@
     "the preview pane: the last Blender preview, beside the drawer"
   ],
   "shots": [],
+  "vendored": {
+    "files": [
+      {
+        "path": "index.html",
+        "from": "tools/tweak/index.html",
+        "sha256": "fc21968d41e3e13ecfcf5e2c0d1ea8232d6ad341e1fb791fcbb530da602a6696"
+      },
+      {
+        "path": "tweak.js",
+        "from": "tools/tweak/tweak.js",
+        "sha256": "b46974bb5b1eb513d08bbfe55fec566f1eb4745dd6f929deb2ac632d7541b0f2"
+      },
+      {
+        "path": "tweak.css",
+        "from": "tools/tweak/tweak.css",
+        "sha256": "444c4e395028b6082a5f91d41f3af8470852ab6d5abe6f830479b18e81b3c153"
+      }
+    ],
+    "stubs": [],
+    "recorded": [
+      "renders/asphalt-black-puddle-size-2-65-line-color-white-line-toward-0-80-gravel-570-6-more-20261111-175142-2160.png",
+      "renders/help-20261111-173007-2160.png",
+      "data/schema.json",
+      "data/types.json",
+      "data/defaults.json",
+      "data/finals.json",
+      "data/swatch.json"
+    ]
+  },
   "shotsSkipped": "the dev server at http://127.0.0.1:5371/ was not answering"
 }

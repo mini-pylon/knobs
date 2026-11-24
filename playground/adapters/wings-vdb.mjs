@@ -23,6 +23,22 @@ export const dev = {
   tabs: '.term-tabs .term-tab',
 };
 
+// Copied byte for byte, each under its own path. No font and no
+// public/options/ media is copied.
+export const vendor = [
+  { from: 'index.html', to: 'index.html' },
+  ...['main', 'terminal', 'viz', 'perf', 'params', 'birds', 'cloud-morph', 'shader', 'post', 'detail', 'flags'].map(name => ({ from: `src/${name}.js`, to: `src/${name}.js` })),
+  { from: 'src/style.css', to: 'src/style.css' },
+  { from: 'public/cloud-fallback.svg', to: 'public/cloud-fallback.svg' },
+  { from: 'public/wings-wide.svg', to: 'public/wings-wide.svg' },
+];
+
+// Served in place of the two modules that are not copied.
+export const stubs = [
+  { module: 'src/chat.js', by: 'playground/fixtures/wings-vdb/stubs/chat.js' },
+  { module: 'src/dev-report.js', by: 'playground/fixtures/wings-vdb/stubs/dev-report.js' },
+];
+
 function control(v) {
   const type = v.type ?? 'number';
   const out = { key: v.key, type, value: v.value };
@@ -39,7 +55,12 @@ function commands(text, pattern) {
 const line = (name, about, tag = '') => `/${name}${tag}${about ? `: ${about}` : ''}`;
 
 export async function read(checkout, { reports = defaultReports } = {}) {
-  const params = await import(pathToFileURL(join(checkout, 'src', 'params.js')).href);
+  let params;
+  try {
+    params = await import(pathToFileURL(join(checkout, 'src', 'params.js')).href);
+  } catch (error) {
+    throw new Error(`wings-vdb: src/params.js: ${error.message}`);
+  }
   const terminal = readFileSync(join(checkout, 'src', 'terminal.js'), 'utf8');
   const hiddenList = terminal.match(/HIDDEN_TABS = new Set\(\[([^\]]*)\]\)/)?.[1] ?? '';
   const hidden = new Set([...hiddenList.matchAll(/'(\w+)'/g)].map(m => m[1]));
@@ -51,15 +72,26 @@ export async function read(checkout, { reports = defaultReports } = {}) {
     controls: g.vars.map(control),
   }));
 
-  const valueSets = { defaults: valueSet(groups, 'the defaults in src/params.js', {}) };
+  const valueSets = { defaults: valueSet(groups, 'the defaults in src/params.js', {}, [], {}) };
   const files = existsSync(reports) ? readdirSync(reports).filter(f => f.endsWith('.json')).sort() : [];
   for (const file of files) {
-    const report = JSON.parse(readFileSync(join(reports, file), 'utf8'));
-    const saved = JSON.parse(report.storage?.['wings-vdb:params'] ?? '{}');
+    let report;
+    try {
+      report = JSON.parse(readFileSync(join(reports, file), 'utf8'));
+    } catch (error) {
+      throw new Error(`wings-vdb: ${file}: ${error.message}`);
+    }
+    let saved;
+    try {
+      saved = JSON.parse(report.storage?.['wings-vdb:params'] ?? '{}');
+    } catch (error) {
+      throw new Error(`wings-vdb: ${file}: wings-vdb:params: ${error.message}`);
+    }
     // A name migrate() maps to nothing is retired.
     const retired = Object.keys(saved).filter(path => Object.keys(params.migrate({ [path]: saved[path] })).length === 0)
       .map(path => ({ path, value: saved[path], why: 'retired name' }));
-    valueSets[basename(file, '.json')] = valueSet(groups, `browser report from ${report.at}`, params.migrate(saved), retired);
+    // saved is the report's own params, old names and all: the page migrates them.
+    valueSets[basename(file, '.json')] = valueSet(groups, `browser report from ${report.at}`, params.migrate(saved), retired, saved);
   }
 
   const main = readFileSync(join(checkout, 'src', 'main.js'), 'utf8');

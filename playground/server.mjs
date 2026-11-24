@@ -2,16 +2,22 @@
 // library reloads the playground, @drafts resolved to the drafts folder
 // (playground/drafts/, or KNOBS_DRAFTS, or the drafts option), and @captures
 // to the captures folder (playground/captures/, or KNOBS_CAPTURES, or the
-// captures option). Shared by serve.mjs, shots.mjs and the tests.
+// captures option). A captured project's own page is served from that
+// folder, and wings-vdb's faces come from the fonts option, KNOBS_WINGS_FONTS,
+// or public/fonts in the wings-vdb checkout. Shared by serve.mjs, shots.mjs
+// and the tests.
 //
 // POST /__playground/draft { name, files: { 'controls.js', 'visual.js' | 'extension.js' } }
 // writes a draft the shell's paste form sends. Same-origin only.
 //
 // allowedHosts names the hostnames a proxy in front may use (Vite refuses
 // any other than localhost); serve.mjs takes them as --allow-host.
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { aliases, repo, serve } from '../tests/browser/lib/harness.mjs';
+import * as wingsVdb from './adapters/wings-vdb.mjs';
+import { fixturesPlugin } from './fixtures/routes.mjs';
+import { PREFIXES } from './fixtures/source-side.js';
 
 export const DRAFT_ROUTE = '/__playground/draft';
 const DRAFT_FILES = ['controls.js', 'visual.js', 'extension.js'];
@@ -22,6 +28,8 @@ const LIMIT = 1_000_000;
 function refusal(body) {
   if (!body || typeof body !== 'object') return 'the body must be a JSON object';
   if (typeof body.name !== 'string' || !NAME.test(body.name)) return 'name: letters, digits, - and _ only';
+  const prefix = PREFIXES.find(entry => `${body.name}:`.startsWith(entry));
+  if (prefix) return `${body.name}: a draft cannot use the source storage prefix ${prefix}`;
   const files = body.files;
   if (!files || typeof files !== 'object') return 'files must be an object';
   for (const [file, text] of Object.entries(files)) {
@@ -40,9 +48,11 @@ function draftPlugin(drafts) {
       // A draft added on disk reaches the scenario list, even outside the root.
       server.watcher.add(drafts);
       server.middlewares.use(DRAFT_ROUTE, (req, res) => {
-        const reply = (status, message) => {
+        const reply = (status, message, close) => {
+          if (res.headersSent || res.writableEnded) return;
           res.statusCode = status;
           res.setHeader('content-type', 'application/json');
+          if (close) res.setHeader('connection', 'close');
           res.end(JSON.stringify(status === 200 ? { ok: true, ...message } : { error: message }));
         };
         if (req.method !== 'POST') return reply(405, 'POST only');
@@ -50,16 +60,36 @@ function draftPlugin(drafts) {
         let originHost = null;
         try { originHost = new URL(req.headers.origin).host; } catch { /* no or bad origin */ }
         if (!originHost || originHost !== req.headers.host) return reply(403, 'same origin only');
+        const declared = Number(req.headers['content-length']);
+        if (Number.isFinite(declared) && declared > LIMIT) {
+          reply(400, 'the body is over 1 MB', true);
+          req.resume();
+          return;
+        }
         let size = 0;
         const chunks = [];
+        let over = false;
         req.on('data', chunk => {
+          if (over) return;
           size += chunk.length;
-          if (size > LIMIT) req.destroy();
-          else chunks.push(chunk);
+          if (size > LIMIT) {
+            over = true;
+            chunks.length = 0;
+            reply(400, 'the body is over 1 MB', true);
+            return;
+          }
+          chunks.push(chunk);
         });
         req.on('end', () => {
+          if (over) return;
+          let text;
+          try {
+            text = new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks));
+          } catch {
+            return reply(400, 'the body is not JSON');
+          }
           let body;
-          try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return reply(400, 'the body is not JSON'); }
+          try { body = JSON.parse(text); } catch { return reply(400, 'the body is not JSON'); }
           const why = refusal(body);
           if (why) return reply(400, why);
           const dir = join(drafts, body.name);
@@ -80,17 +110,30 @@ function draftPlugin(drafts) {
   };
 }
 
-export function servePlayground({ host = '127.0.0.1', port = 0, drafts, captures, logLevel = 'info', allowedHosts = [] } = {}) {
-  const draftsDir = resolve(drafts ?? process.env.KNOBS_DRAFTS ?? join(repo, 'playground', 'drafts'));
-  const capturesDir = resolve(captures ?? process.env.KNOBS_CAPTURES ?? join(repo, 'playground', 'captures'));
-  mkdirSync(draftsDir, { recursive: true });
-  mkdirSync(capturesDir, { recursive: true });
-  return serve(join(repo, 'playground'), {
+export async function servePlayground({ host = '127.0.0.1', port = 0, drafts, captures, fonts, logLevel = 'info', allowedHosts = [] } = {}) {
+  const draftsResolved = resolve(drafts ?? process.env.KNOBS_DRAFTS ?? join(repo, 'playground', 'drafts'));
+  const capturesResolved = resolve(captures ?? process.env.KNOBS_CAPTURES ?? join(repo, 'playground', 'captures'));
+  mkdirSync(draftsResolved, { recursive: true });
+  mkdirSync(capturesResolved, { recursive: true });
+  // Real paths, so a symlinked captures folder matches Vite's real importer and fs.allow.
+  const draftsDir = realpathSync(draftsResolved);
+  const capturesDir = realpathSync(capturesResolved);
+  const fontsDir = resolve(fonts ?? process.env.KNOBS_WINGS_FONTS ?? join(wingsVdb.defaultCheckout, 'public', 'fonts'));
+  const fixtures = fixturesPlugin({ captures: capturesDir, fonts: fontsDir, allowedHosts, logLevel });
+  const site = await serve(join(repo, 'playground'), {
     cacheDir: join(repo, 'tests', '.tmp', 'playground-vite'),
     logLevel,
     // A capture written after the server started reaches the scenario list too.
-    plugins: [draftPlugin(draftsDir), { name: 'knobs-playground-captures', configureServer: server => { server.watcher.add(capturesDir); } }],
+    plugins: [
+      draftPlugin(draftsDir),
+      { name: 'knobs-playground-captures', configureServer: server => { server.watcher.add(capturesDir); } },
+      fixtures,
+    ],
+    beforeListen() {
+      if (fixtures.boot.error) throw fixtures.boot.error;
+    },
     resolve: { alias: [...aliases(), { find: '@drafts', replacement: draftsDir }, { find: '@captures', replacement: capturesDir }], dedupe: ['react', 'react-dom'] },
-    server: { host, port, strictPort: port !== 0, allowedHosts, fs: { allow: [repo, draftsDir, capturesDir] } },
+    server: { host, port, strictPort: port !== 0, allowedHosts, fs: { allow: [realpathSync(repo), draftsDir, capturesDir] } },
   });
+  return { ...site, captures: capturesDir };
 }

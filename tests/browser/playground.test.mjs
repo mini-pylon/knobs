@@ -10,9 +10,7 @@ import { join } from 'node:path';
 import { closeAll, collectErrors, launch, newPage, repo } from './lib/harness.mjs';
 import { randomSchema } from '../../playground/random.js';
 import { servePlayground } from '../../playground/server.mjs';
-import { build } from '../../playground/adapters/common.mjs';
-import * as miniPylon from '../../playground/adapters/mini-pylon.mjs';
-import * as wingsVdb from '../../playground/adapters/wings-vdb.mjs';
+import { captureFixtures, collectPageErrors, writeCaptures } from './lib/captures.mjs';
 
 const exemplars = Object.keys(JSON.parse(readFileSync(new URL('./exemplars.json', import.meta.url), 'utf8')));
 const exemplarDir = name => join(repo, 'skills', 'knobs', 'exemplars', name);
@@ -23,31 +21,19 @@ const drafts = mkdtempSync(join(repo, 'tests', '.tmp', 'drafts-'));
 mkdirSync(join(drafts, 'curve-copy'));
 for (const file of ['controls.js', 'visual.js']) cpSync(join(exemplarDir('curve-trace'), file), join(drafts, 'curve-copy', file));
 
-// A captures folder of the test's own, built from the fixture copies of both
-// projects; wings-vdb's has one shot of its drawer.
+// A captures folder of the test's own, built from the stand-in checkouts of
+// both projects with their source snapshots (lib/captures.mjs); wings-vdb's
+// has two shots of its drawer. The fonts folder is the test's own and empty.
 const captures = mkdtempSync(join(repo, 'tests', '.tmp', 'captures-'));
-const captureFixtures = join(repo, 'tests', 'fixtures', 'captures');
-// A 1x1 PNG.
-const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
-async function writeCaptures() {
-  const wings = await build(wingsVdb, join(captureFixtures, 'wings-vdb'), { reports: join(captureFixtures, 'wings-vdb-browsers') });
-  mkdirSync(join(captures, 'wings-vdb', 'shots'), { recursive: true });
-  writeFileSync(join(captures, 'wings-vdb', 'shots', '01-wings-vdb.png'), PNG);
-  wings.shots = [{ tab: 'wings-vdb', file: 'shots/01-wings-vdb.png' }];
-  writeFileSync(join(captures, 'wings-vdb', 'capture.json'), JSON.stringify(wings));
-  const pylon = await build(miniPylon, join(captureFixtures, 'mini-pylon'));
-  pylon.shotsSkipped = 'the dev server at http://127.0.0.1:5371/ was not answering';
-  mkdirSync(join(captures, 'mini-pylon'));
-  writeFileSync(join(captures, 'mini-pylon', 'capture.json'), JSON.stringify(pylon));
-}
+const fonts = mkdtempSync(join(repo, 'tests', '.tmp', 'fonts-'));
 
 let site, browser;
 before(async () => {
-  await writeCaptures();
-  site = await servePlayground({ drafts, captures, logLevel: 'error' });
+  await writeCaptures(captures);
+  site = await servePlayground({ drafts, captures, fonts, logLevel: 'error' });
   browser = await launch();
 });
-after(() => closeAll(() => browser?.close(), () => site?.close(), () => rmSync(drafts, { recursive: true, force: true }), () => rmSync(captures, { recursive: true, force: true })));
+after(() => closeAll(() => browser?.close(), () => site?.close(), ...[drafts, captures, fonts].map(dir => () => rmSync(dir, { recursive: true, force: true }))));
 
 // Opens one stage and waits until it has mounted or failed.
 async function stage(query) {
@@ -154,7 +140,7 @@ test('the commands view lists an extension\'s pages and commands', async () => {
 });
 
 test('an edited schema remounts the stage with it', async () => {
-  const { page, errors } = await shell('s=stress');
+  const { page, errors } = await shell('s=stress&editor=1');
   try {
     const schema = [{ name: 'edited', controls: [{ key: 'size', type: 'number', value: 2, min: 0, max: 4, step: 1 }] }];
     await page.locator('.source > textarea').fill(JSON.stringify(schema));
@@ -166,11 +152,11 @@ test('an edited schema remounts the stage with it', async () => {
 });
 
 test('a schema the store refuses shows its error in the shell', async () => {
-  const { page } = await shell('s=stress');
+  const { page } = await shell('s=stress&editor=1');
   try {
     await page.locator('.source > textarea').fill('[{"name": "bad group"}]');
     await page.locator('.source button', { hasText: 'apply' }).click();
-    await assert.doesNotReject(page.locator('.source .error', { hasText: 'bad group name' }).waitFor());
+    await assert.doesNotReject(page.locator('pre.error', { hasText: 'bad group name' }).waitFor());
   } finally { await page.context().close(); }
 });
 
@@ -186,11 +172,42 @@ test('a width preset resizes the stage frame', async () => {
 test('reroll moves a random scenario to another seed', async () => {
   const { page } = await shell('s=random:3');
   try {
-    await page.locator('.source button', { hasText: 'reroll' }).click();
+    await page.locator('.bar button', { hasText: 'reroll' }).click();
     await page.waitForURL(url => new URLSearchParams(url.search).get('s') !== 'random:3');
     await page.frameLocator('iframe.stage').locator('body[data-ready]').waitFor();
     assert.match(new URLSearchParams(new URL(page.url()).search).get('s'), /^random:\d+$/);
   } finally { await page.context().close(); }
+});
+
+test('the shell hides the schema editor unless editor=1, and keeps reroll and its errors', async () => {
+  const { page } = await shell('s=random:3');
+  try {
+    assert.equal(await page.locator('.source').isVisible(), false);
+    assert.equal(await page.locator('.source > textarea').isVisible(), false);
+    // Without the editor, the stage starts at the left edge.
+    const left = await page.locator('.stage-wrap').evaluate(s => s.getBoundingClientRect().left);
+    assert.equal(left, 0);
+    const values = await page.locator('select.scenario option').evaluateAll(options => options.map(o => o.value));
+    assert.ok(!values.includes('json'), values.join(' '));
+    assert.equal(await page.locator('.bar button', { hasText: 'reroll' }).isVisible(), true);
+  } finally { await page.context().close(); }
+
+  const refused = await newPage(browser, { viewport: { width: 1600, height: 1000 } });
+  try {
+    await refused.goto(`${site.url}?s=stress&side=banana`);
+    await refused.locator('pre.error', { hasText: 'unknown side: banana' }).waitFor({ timeout: 2000 });
+  } finally { await refused.context().close(); }
+
+  const { page: editing } = await shell('s=stress&editor=1');
+  try {
+    assert.equal(await editing.locator('.source > textarea').isVisible(), true);
+    const values = await editing.locator('select.scenario option').evaluateAll(options => options.map(o => o.value));
+    assert.ok(values.includes('json'), values.join(' '));
+    // A scenario picked with the editor open keeps it open.
+    await editing.locator('select.scenario').selectOption('exemplar:curve-trace');
+    await editing.waitForURL(url => new URLSearchParams(url.search).get('s') === 'exemplar:curve-trace');
+    assert.equal(new URLSearchParams(new URL(editing.url()).search).get('editor'), '1');
+  } finally { await editing.context().close(); }
 });
 
 // The grid: several stages side by side, each captioned with its scenario.
@@ -246,7 +263,7 @@ test('playground:shots saves every tab of a scenario and the grid', async () => 
   const out = await mkdtemp(join(repo, 'tests', '.tmp', 'shots-'));
   try {
     await new Promise((resolve, reject) => execFile(process.execPath, [join(repo, 'playground', 'shots.mjs'), '--only', 'stress', '--out', out],
-      { timeout: 90000 }, (error, stdout, stderr) => (error ? reject(new Error(`${error.message}\n${stderr}`)) : resolve(stdout))));
+      { timeout: 90000, env: { ...process.env, KNOBS_CAPTURES: captures, KNOBS_DRAFTS: drafts, KNOBS_WINGS_FONTS: fonts } }, (error, stdout, stderr) => (error ? reject(new Error(`${error.message}\n${stderr}`)) : resolve(stdout))));
     const files = (await readdir(out)).sort();
     // console, performance, then the five visible groups; hidden stays hidden.
     assert.deepEqual(files, [
@@ -275,7 +292,7 @@ test('the shell lists drafts in its scenario picker', async () => {
 });
 
 test('a draft pasted into the shell is written to the drafts folder and mounted', async () => {
-  const { page, errors } = await shell('s=stress');
+  const { page, errors } = await shell('s=stress&editor=1');
   try {
     await page.locator('.paste summary').click();
     await page.locator('.paste input[name=name]').fill('pasted-one');
@@ -326,7 +343,7 @@ test('the playground answers a host it is told to allow, and takes a same-host h
   // A drafts folder of its own: a draft written into the shared one makes the
   // main server reload its open pages, in the middle of the next test.
   const proxiedDrafts = mkdtempSync(join(repo, 'tests', '.tmp', 'drafts-'));
-  const proxied = await servePlayground({ drafts: proxiedDrafts, captures, logLevel: 'error', allowedHosts: ['knobs.example.test'] });
+  const proxied = await servePlayground({ drafts: proxiedDrafts, captures, fonts, logLevel: 'error', allowedHosts: ['knobs.example.test'] });
   try {
     const { request } = await import('node:http');
     const call = (method, path, headers, body) => new Promise((resolve, reject) => {
@@ -364,12 +381,12 @@ test('the drawer is titled with the exemplar or draft it mounts', async () => {
 });
 
 // Captures: a project's own drawer, as capture.mjs wrote it.
-test('the stage mounts a capture titled with its project, its hidden groups without tabs', async () => {
+test('the stage mounts a capture titled knobs-<project>, its hidden groups without tabs', async () => {
   const { page, errors } = await stage('s=capture:wings-vdb');
   try {
     assert.deepEqual(errors, []);
     const labels = await tabs(page);
-    assert.equal(labels[0], 'wings-vdb');
+    assert.equal(labels[0], 'knobs-wings-vdb');
     for (const group of ['dispersal', 'scroll', 'presence', 'sunlight', 'dive']) assert.ok(labels.includes(group), `tab ${group}`);
     for (const group of ['birds', 'hover', 'opening']) assert.ok(!labels.includes(group), `no tab ${group}`);
     assert.equal(await page.evaluate(() => window.__stage.store.control('scroll.hang')), 1.18);
@@ -404,17 +421,17 @@ test('the shell lists captures in its picker and shows the capture view only for
 });
 
 test('the capture view shows the source, value sets, what did not translate, and the original shots', async () => {
-  const { page, errors } = await shell('s=capture:wings-vdb&view=capture');
+  const { page, errors } = await shell('s=capture:wings-vdb&view=capture&fixtures=1');
   try {
     const capture = view(page, 'capture');
     await capture.locator('select.value-set').waitFor();
     const text = await capture.innerText();
     for (const words of ['wings-vdb', 'captured 20', 'not in git', '/defaults', 'viz.js']) assert.ok(text.includes(words), `capture view shows ${words}:\n${text}`);
     assert.deepEqual(await capture.locator('select.value-set option').evaluateAll(o => o.map(x => x.value)), ['defaults', 'fixture01']);
-    const shot = capture.locator('figure.shot img');
+    const shot = capture.locator('figure.shot img').first();
     await shot.waitFor();
     assert.ok(await shot.evaluate(img => img.complete && img.naturalWidth === 1), 'the shot loads');
-    assert.match(await capture.locator('figure.shot figcaption').innerText(), /wings-vdb/);
+    assert.deepEqual(await capture.locator('figure.shot figcaption').allInnerTexts(), ['wings-vdb', 'dispersal']);
     // Picking a value set reloads with set= and shows what it dropped.
     await capture.locator('select.value-set').selectOption('fixture01');
     await page.waitForURL(url => new URLSearchParams(url.search).get('set') === 'fixture01');
@@ -425,18 +442,71 @@ test('the capture view shows the source, value sets, what did not translate, and
   } finally { await page.context().close(); }
 });
 
+test('the capture view and the grid hide what did not translate and the shots unless fixtures=1', async () => {
+  const { page } = await shell('s=capture:wings-vdb&view=capture');
+  try {
+    const capture = view(page, 'capture');
+    await capture.locator('select.value-set').waitFor();
+    const text = await capture.innerText();
+    for (const words of ['not translated', 'viz.js', 'original drawer']) assert.ok(!text.includes(words), `capture view hides ${words}:\n${text}`);
+    assert.equal(await capture.locator('figure.shot').count(), 0);
+  } finally { await page.context().close(); }
+
+  const { page: missing } = await shell('s=capture:mini-pylon&view=capture');
+  try {
+    const capture = view(missing, 'capture');
+    await capture.locator('select.value-set').waitFor();
+    assert.ok(!(await capture.innerText()).includes('was not answering'));
+  } finally { await missing.context().close(); }
+
+  const grid = await newPage(browser, { viewport: { width: 1600, height: 1000 } });
+  try {
+    await grid.goto(`${site.url}grid.html?set=captures&w=200&h=120`);
+    await grid.locator('.capture-row').first().waitFor();
+    for (const row of await grid.locator('.capture-row').all()) {
+      assert.deepEqual(await row.locator('figure').evaluateAll(f => f.map(x => x.className)), ['cell source', 'cell knobs']);
+    }
+  } finally { await grid.context().close(); }
+});
+
 test('the capture view says why a capture has no shots', async () => {
-  const { page } = await shell('s=capture:mini-pylon&view=capture');
+  const { page } = await shell('s=capture:mini-pylon&view=capture&fixtures=1');
   try {
     await assert.doesNotReject(view(page, 'capture').getByText('was not answering').waitFor());
   } finally { await page.context().close(); }
 });
 
-test('the grid shows the captures set', async () => {
-  const { page, errors } = await grid('set=captures');
+test('the grid shows a row per tab of each capture: its shot, its source side and its knobs side', async () => {
+  const page = await newPage(browser, { viewport: { width: 1600, height: 1000 } });
+  const errors = collectPageErrors(page);
+  await page.goto(`${site.url}grid.html?set=captures&fixtures=1`);
+  await page.locator('body[data-ready]').waitFor({ timeout: 30000 });
   try {
-    assert.deepEqual((await captions(page)).map(c => c.split(/\s/)[0]), ['capture:mini-pylon', 'capture:wings-vdb']);
+    const rows = await page.locator('.capture-row').evaluateAll(r => r.map(x => `${x.dataset.capture} ${x.dataset.tab}`));
+    assert.deepEqual(rows, [
+      ...['ground', 'clutter', 'light', 'camera', 'pylon', 'render'].map(t => `mini-pylon ${t}`),
+      ...['dispersal', 'scroll', 'presence', 'sunlight', 'dive'].map(t => `wings-vdb ${t}`),
+    ]);
+    for (const row of await page.locator('.capture-row').all()) {
+      assert.deepEqual(await row.locator('figure').evaluateAll(f => f.map(x => x.className)), ['cell shot', 'cell source', 'cell knobs']);
+    }
+    // wings-vdb's dispersal row has its shot; the others say they have none.
+    const dispersal = page.locator('.capture-row[data-capture="wings-vdb"][data-tab="dispersal"]');
+    assert.ok(await dispersal.locator('.shot img').evaluate(img => img.complete && img.naturalWidth === 1));
+    assert.equal(await page.locator('.capture-row[data-tab="scroll"] .shot .why').innerText(), 'no shot of scroll');
     assert.equal(await page.locator('.cell.failed').count(), 0);
+    // Each source cell ended open on its own tab, in its own page.
+    for (const frame of page.frames().filter(f => f.url().includes('/source/'))) {
+      const title = await frame.frameElement().then(e => e.getAttribute('title'));
+      const tab = title.split(':')[2];
+      assert.equal(await frame.locator('.term.open .term-tab.active').innerText(), tab, title);
+    }
+    // One at a time: each source cell started after the one before it was ready.
+    const times = await page.locator('.cell.source').evaluateAll(f => f.map(x => [Number(x.dataset.started), Number(x.dataset.ready)]));
+    assert.equal(times.length, 11);
+    for (let i = 1; i < times.length; i++) assert.ok(times[i][0] >= times[i - 1][1], `source cell ${i} started before cell ${i - 1} was ready`);
+    // The knobs cells are the knobs side, on the row's tab.
+    assert.equal(await page.frameLocator('.capture-row[data-capture="wings-vdb"][data-tab="scroll"] .knobs iframe').locator('.term-tab.active').innerText(), 'scroll');
     assert.deepEqual(errors, []);
   } finally { await page.context().close(); }
 });
@@ -446,11 +516,14 @@ test('playground:shots takes the captures set', async () => {
   const out = mkdtempSync(join(repo, 'tests', '.tmp', 'shots-'));
   try {
     await new Promise((resolve, reject) => execFile(process.execPath, [join(repo, 'playground', 'shots.mjs'), '--only', 'captures', '--out', out, '--scale', '1'],
-      { timeout: 120000, env: { ...process.env, KNOBS_CAPTURES: captures, KNOBS_DRAFTS: drafts } },
+      { timeout: 120000, env: { ...process.env, KNOBS_CAPTURES: captures, KNOBS_DRAFTS: drafts, KNOBS_WINGS_FONTS: fonts } },
       (error, stdout, stderr) => (error ? reject(new Error(`${error.message}\n${stderr}`)) : resolve(stdout))));
     const files = readdirSync(out);
     assert.ok(files.includes('grid.png'));
     assert.ok(files.some(f => f.startsWith('capture-mini-pylon-')) && files.some(f => f.startsWith('capture-wings-vdb-')), files.join(' '));
+    // The source side, one shot per tab of each capture.
+    for (const tab of ['dispersal', 'scroll', 'presence', 'sunlight', 'dive']) assert.ok(files.includes(`capture-wings-vdb-source-${tab}.png`), `capture-wings-vdb-source-${tab}.png in ${files.join(' ')}`);
+    for (const tab of ['ground', 'clutter', 'light', 'camera', 'pylon', 'render']) assert.ok(files.includes(`capture-mini-pylon-source-${tab}.png`), tab);
     assert.deepEqual(files.filter(f => f !== 'grid.png' && !f.startsWith('capture-')), []);
   } finally { rmSync(out, { recursive: true, force: true }); }
 });

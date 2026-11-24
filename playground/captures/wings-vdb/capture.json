@@ -5,7 +5,7 @@
     "commit": "7f92902e871e6ceb132d1ec82dc4edffa8314ad6",
     "dirty": true
   },
-  "capturedAt": "2026-11-13T21:24:02.207Z",
+  "capturedAt": "2026-11-16T06:50:29.223Z",
   "groups": [
     {
       "name": "dispersal",
@@ -803,12 +803,100 @@
   "valueSets": {
     "defaults": {
       "about": "the defaults in src/params.js",
-      "values": {}
+      "values": {},
+      "sourceValues": {}
     },
     "d449bfd5": {
       "about": "browser report from 2026-11-13T18:00:17.132Z",
       "values": {
         "dispersal.preview": 0
+      },
+      "sourceValues": {
+        "dispersal.preview": 0,
+        "dispersal.expand": 0,
+        "dispersal.curve": 2,
+        "dispersal.hang": 1.18,
+        "dispersal.morph": 1,
+        "dispersal.drift": 0,
+        "dispersal.driftScale": 1.45,
+        "dispersal.driftSpeed": 1,
+        "dispersal.fracture": 0.31,
+        "dispersal.fractureScale": 3.1,
+        "dispersal.fractureBias": 0.4,
+        "dispersal.fragments": 0.08,
+        "dispersal.fragmentCut": 0.3,
+        "dispersal.fragmentSoft": 0.38,
+        "dispersal.thinning": 0.36,
+        "dispersal.swirl": 0,
+        "dispersal.lift": 0,
+        "dispersal.scrollEase": 9,
+        "dispersal.snap": 1,
+        "dispersal.snapRange": 1.05,
+        "dispersal.snapDelay": 0,
+        "dispersal.snapTime": 1.9,
+        "presence.density": 8.6,
+        "presence.softness": 0.1,
+        "presence.puff": 0.87,
+        "presence.scale": 0.97,
+        "presence.texture": 5.9,
+        "presence.lumps": 2.8,
+        "presence.contrast": 0.7,
+        "presence.billow": 0.53,
+        "sunlight.sunElevation": 44,
+        "sunlight.sunAzimuth": -62,
+        "sunlight.light": 1.04,
+        "sunlight.shade": 1,
+        "sunlight.absorption": 3.3,
+        "sunlight.beams": 0.55,
+        "sunlight.beamLength": 0.49,
+        "sunlight.beamStreaks": 0.09,
+        "birds.birds": 0,
+        "birds.often": 17.1,
+        "birds.size": 1,
+        "birds.count": 1,
+        "birds.speed": 1,
+        "dive.preview": 1,
+        "dive.hold": 0,
+        "dive.drift": 0,
+        "dive.driftScale": 0.35,
+        "dive.lift": 0,
+        "dive.reach": 0,
+        "dive.fray": 0.35,
+        "dive.erode": 0.18,
+        "dive.wear": 0.23,
+        "dive.fadeAt": 0.06,
+        "dive.in": 1,
+        "dive.out": 1.22,
+        "dive.link": 0,
+        "hover.preview": 1,
+        "hover.hold": 0,
+        "hover.puff": 0,
+        "hover.lumps": 0,
+        "hover.swell": 0.033,
+        "hover.soft": 0.23,
+        "hover.grain": -0.33,
+        "hover.in": 0.5,
+        "hover.out": 0.25,
+        "hover.link": 1,
+        "hover.displace": 0,
+        "opening.fullSize": 1.5,
+        "opening.fullSpread": 0.7,
+        "opening.fullBottom": 0,
+        "opening.fullDepth": 0.45,
+        "opening.fullHaze": 0.35,
+        "opening.blockSize": 1,
+        "opening.rough": 0.6,
+        "opening.carve": 0.6,
+        "opening.carveHeal": 14,
+        "opening.planetSize": 1.25,
+        "opening.bands": 0.8,
+        "opening.bandCount": 9,
+        "opening.spin": 1,
+        "opening.tilt": 23,
+        "opening.fogDepth": 1.1,
+        "opening.wipe": 1,
+        "opening.fogHeal": 5,
+        "opening.brush": 0.5
       }
     }
   },
@@ -865,5 +953,95 @@
       "tab": "dive",
       "file": "shots/07-dive.png"
     }
-  ]
+  ],
+  "vendored": {
+    "files": [
+      {
+        "path": "index.html",
+        "from": "index.html",
+        "sha256": "1c8df2cc39bf298c97c09d2254aeeb640d1cfb4be147c7dd81d9fc93f81b6a24"
+      },
+      {
+        "path": "src/main.js",
+        "from": "src/main.js",
+        "sha256": "867dd0447847824f21d5bf7b16c95be7dde9ce468590e734a03b14126dba6841"
+      },
+      {
+        "path": "src/terminal.js",
+        "from": "src/terminal.js",
+        "sha256": "4037ade080a93bc16fcdc6783d6d498c591588c2504dccdcb835662fa80c6168"
+      },
+      {
+        "path": "src/viz.js",
+        "from": "src/viz.js",
+        "sha256": "ac00937d89e06b40b4487466f49351e17a2bd07040af492a255895384beb2db3"
+      },
+      {
+        "path": "src/perf.js",
+        "from": "src/perf.js",
+        "sha256": "1534e1a606e9c72d9248cf2060970fc4f6435d1de89090ce4d8c59cbdbe27172"
+      },
+      {
+        "path": "src/params.js",
+        "from": "src/params.js",
+        "sha256": "1bc93d319f7a13d0417dc63a39136603362a5712db584673bf1d1392b8e6d231"
+      },
+      {
+        "path": "src/birds.js",
+        "from": "src/birds.js",
+        "sha256": "b9f358c7e4bb6a4e009b63bd081e1a219cf17b3da7d632790f04456d3a1d0ce6"
+      },
+      {
+        "path": "src/cloud-morph.js",
+        "from": "src/cloud-morph.js",
+        "sha256": "038a9eccfad4d2e0cccf5305df2bfb0bb1dca2603c29935131cb092546b09a3e"
+      },
+      {
+        "path": "src/shader.js",
+        "from": "src/shader.js",
+        "sha256": "5290dba713dcde3a9cf4a77eb9c2d673aafae699a406a466a1fb421242db4480"
+      },
+      {
+        "path": "src/post.js",
+        "from": "src/post.js",
+        "sha256": "d8eb02d387e2a7d26207356e9df1504acdde82ac2ac6b217f1c062b25208fdeb"
+      },
+      {
+        "path": "src/detail.js",
+        "from": "src/detail.js",
+        "sha256": "4da069117bd3fb6fd80e12189c0bd62e68bfb16389e7d3455cee4bd5a1f44920"
+      },
+      {
+        "path": "src/flags.js",
+        "from": "src/flags.js",
+        "sha256": "2e379139b5a5f2ea352a1b458f3d2c62362f610e7c80bfd54e7cbec56b1afe14"
+      },
+      {
+        "path": "src/style.css",
+        "from": "src/style.css",
+        "sha256": "6d5c3d114201c304175b4385383671270cbe4b38790ae294b009f09d36f4592a"
+      },
+      {
+        "path": "public/cloud-fallback.svg",
+        "from": "public/cloud-fallback.svg",
+        "sha256": "99a9e026da43f1918180b710398feeb44ad7f76246f04fcf82e5cc7d8d4c1ec3"
+      },
+      {
+        "path": "public/wings-wide.svg",
+        "from": "public/wings-wide.svg",
+        "sha256": "873c8f816dfaf7dddc77626b1b339686d588f379dc10751352768989dc3bc1be"
+      }
+    ],
+    "stubs": [
+      {
+        "module": "src/chat.js",
+        "by": "playground/fixtures/wings-vdb/stubs/chat.js"
+      },
+      {
+        "module": "src/dev-report.js",
+        "by": "playground/fixtures/wings-vdb/stubs/dev-report.js"
+      }
+    ],
+    "recorded": []
+  }
 }

@@ -1,0 +1,6 @@
+/* Stand-in for mini-pylon's tools/tweak/tweak.css. */
+body { margin: 0; font: 14px system-ui, sans-serif; }
+img.render { width: 240px; height: 240px; background: #eee; }
+.term { position: fixed; right: 0; bottom: 0; width: 480px; background: #fff; display: none; }
+.term.open { display: block; }
+.term-tab.active { font-weight: bold; }

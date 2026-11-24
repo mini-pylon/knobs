@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Mini Pylon tweak</title>
+  <link rel="stylesheet" href="tweak.css">
+</head>
+<body>
+  <header id="top">
+    <span class="title">Mini Pylon</span>
+    <span id="state">loading…</span>
+  </header>
+  <main id="view">
+    <figure class="frame">
+      <img class="render" alt="Preview render of the Mini Pylon scene">
+      <span class="busy" aria-hidden="true"></span>
+    </figure>
+  </main>
+  <nav id="history" aria-label="Recent previews"></nav>
+  <div id="actions">
+    <button id="final-now" type="button" title="queue a full-quality 2160 px final of these settings, named after them">final 2160</button>
+    <button id="render-now" type="button" data-pending="0" title="render every change at once (r)">render</button>
+  </div>
+  <script src="tweak.js"></script>
+</body>
+</html>
